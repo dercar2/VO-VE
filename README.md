@@ -1,4 +1,3 @@
-[GitHUB_readme.md](https://github.com/user-attachments/files/31664874/GitHUB_readme.md)
 # VO-VE
 
 **View Only - View Everything**
