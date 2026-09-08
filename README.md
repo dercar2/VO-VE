@@ -14,7 +14,7 @@ NAS. Программа помогает быстро найти нужный м
 - Сайт: [vo-ve.ru](https://vo-ve.ru)
 - Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **0.2.13**
+- Версия: **0.2.14**
 - Сборка: **release Alfa**
 - Платформы текущей поставки: **Windows x64 и Linux amd64**
 
@@ -36,8 +36,9 @@ VO-VE занимает промежуточное место: он работа�
    документы Adobe, Affinity и открытые графические форматы.
 2. Быстрый просмотр локальных папок, SMB-ресурсов, серверов и NAS без блокировки интерфейса на
    медленных операциях.
-3. Копирование, перемещение, переименование и удаление файлов с явной обработкой конфликтов,
-   контролем результата и восстановлением прерванных операций.
+3. Копирование, перемещение, одиночное и пакетное переименование файлов и папок, удаление
+   с явной обработкой конфликтов и восстановлением прерванных операций. Ctrl+C/Ctrl+V
+   работают с выделенными объектами через системный буфер обмена.
 4. Мгновенный локальный фильтр по имени в открытом каталоге по мере ввода.
 5. Глобальный поиск по имени через Everything в Windows или plocate в Linux.
 6. Постоянное большое поле просмотра, в том числе для многостраничных документов.
@@ -47,6 +48,9 @@ VO-VE занимает промежуточное место: он работа�
 10. Управление цветом с учётом встроенных ICC-профилей.
 11. Отображение количества страниц у многостраничного документа и листание страниц.
 12. Четыре темы и оригинальный винтажный интерфейс, вдохновлённый эстетикой электронных схем.
+13. Общий просмотр файлов из дерева подпапок: режим «Глаз» с заметной рамкой области миниатюр.
+14. Естественная сортировка имён (`2, 17, 187`) и сохранение позиции и выделения при возврате в папку.
+15. Дата и время изменения под именем выбранного файла; недавнее время выделяется цветным фоном.
 
 ## Поддерживаемые Форматы
 
@@ -83,7 +87,7 @@ VO-VE занимает промежуточное место: он работа�
 VO-VE не изменяет графическое содержимое документов, но поддерживает необходимые операции с
 самими файлами и папками:
 
-- создание папок;
+- создание папок, в том числе клавишей F7;
 - одиночное и пакетное переименование;
 - копирование drag-and-drop;
 - перемещение drag-and-drop с зажатым `Shift`;
@@ -165,15 +169,15 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 Готовые сборки находятся в отдельном разделе
 [Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
 
-Текущая версия: **[VO-VE 0.2.13](https://github.com/dercar2/VO-VE/releases/tag/v0.2.13)**.
+Текущая версия: **[VO-VE 0.2.14](https://github.com/dercar2/VO-VE/releases/tag/v0.2.14)**.
 
-- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-windows-x64-setup.exe)
-- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-windows-x64-portable.zip)
-- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/vo-ve_0.2.13_amd64.deb)
-- [Исходники 0.2.13](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-sources.zip)
-- [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-notices.zip)
-- [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
-- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/SHA256SUMS.txt)
+- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.14-windows-x64-setup.exe)
+- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.14-windows-x64-portable.zip)
+- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/vo-ve_0.2.14_amd64.deb)
+- [Исходники 0.2.14](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.14-sources.zip)
+- [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.13-notices.zip)
+- [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
+- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/SHA256SUMS.txt)
 
 В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет
 `.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
@@ -181,8 +185,8 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 
 ## Сборка Из Исходников
 
-Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.13-sources.zip`
-на странице релиза. Этот архив содержит исходный код, CMake-файлы, тесты,
+Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.14-sources.zip`
+на странице релиза. Этот архив содержит производственный исходный код, CMake-файлы,
 используемую приложением графику, определения упаковки и выбранные контуры сторонних библиотек.
 Автоматические ссылки GitHub `Source code (zip)` / `Source code (tar.gz)` содержат снимок
 публичного репозитория; пока код не перенесён в Git, для сборки используйте указанное вложение.
@@ -192,9 +196,8 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 Базовая headless-сборка:
 
 ```sh
-cmake --preset ninja-release
-cmake --build --preset ninja-release
-ctest --test-dir out/build/ninja-release --output-on-failure
+cmake --preset source-release
+cmake --build --preset source-release
 ```
 
 Полная сборка интерфейса и всех обработчиков требует Qt и закреплённых зависимостей. Точная
@@ -202,6 +205,9 @@ ctest --test-dir out/build/ninja-release --output-on-failure
 `THIRD_PARTY_NOTES.md` и `docs/dependencies`.
 Точные исходники внешних зависимостей доступны отдельным вложением
 `VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
+Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером
+базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.14.
+Тесты, старые экспериментальные интерфейсы, логи и рабочие отчёты в этот компактный снимок не входят.
 
 ## Состояние Проекта
 
