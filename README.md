@@ -14,9 +14,11 @@ NAS. Программа помогает быстро найти нужный м
 - Сайт: [vo-ve.ru](https://vo-ve.ru)
 - Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **0.2.1**
+- Версия: **0.2.13**
 - Сборка: **release Alfa**
 - Платформы текущей поставки: **Windows x64 и Linux amd64**
+
+**[Скачать VO-VE](https://github.com/dercar2/VO-VE/releases/latest)**
 
 ## Зачем Нужен VO-VE
 
@@ -160,9 +162,18 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 
 ## Установка
 
-Готовые сборки для Windows и Linux будут публиковаться в разделе
-[Releases](https://github.com/dercar2/VO-VE/releases). До размещения первого публичного релиза эта
-страница может быть пустой.
+Готовые сборки находятся в отдельном разделе
+[Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
+
+Текущая версия: **[VO-VE 0.2.13](https://github.com/dercar2/VO-VE/releases/tag/v0.2.13)**.
+
+- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-windows-x64-setup.exe)
+- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-windows-x64-portable.zip)
+- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/vo-ve_0.2.13_amd64.deb)
+- [Исходники 0.2.13](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-sources.zip)
+- [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-notices.zip)
+- [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
+- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.13/SHA256SUMS.txt)
 
 В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет
 `.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
@@ -170,8 +181,11 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 
 ## Сборка Из Исходников
 
-Репозиторий будет содержать предпочтительную форму исходного кода, CMake-файлы, тесты,
+Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.13-sources.zip`
+на странице релиза. Этот архив содержит исходный код, CMake-файлы, тесты,
 используемую приложением графику, определения упаковки и выбранные контуры сторонних библиотек.
+Автоматические ссылки GitHub `Source code (zip)` / `Source code (tar.gz)` содержат снимок
+публичного репозитория; пока код не перенесён в Git, для сборки используйте указанное вложение.
 Скомпилированные объекты, кэши инструментов, приватные тестовые корпуса и готовые релизные
 бинарники в историю Git не входят.
 
@@ -184,8 +198,10 @@ ctest --test-dir out/build/ninja-release --output-on-failure
 ```
 
 Полная сборка интерфейса и всех обработчиков требует Qt и закреплённых зависимостей. Точная
-сборочная цепочка будет описана в `BUILDING.md`; версии и контрольные суммы зависимостей - в
+сборочная цепочка описана в `BUILDING.md` внутри архива; версии и контрольные суммы зависимостей - в
 `THIRD_PARTY_NOTES.md` и `docs/dependencies`.
+Точные исходники внешних зависимостей доступны отдельным вложением
+`VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
 
 ## Состояние Проекта
 
@@ -213,3 +229,6 @@ VO-VE распространяется по лицензии **GPL-3.0-or-later*
 версии также должны сохранять свободу доступа к исходному коду на условиях GPL.
 
 Сторонние компоненты сохраняют собственные лицензии и уведомления.
+В частности, PDF-worker включает MuPDF под AGPL-3.0-or-later; условия этой части не заменяются
+одной только GPL проекта. Полные тексты и уведомления доступны во вложении
+`VO-VE-0.2.13-notices.zip` и должны сопровождать бинарники при дальнейшем распространении.
