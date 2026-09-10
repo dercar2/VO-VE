@@ -14,7 +14,7 @@ NAS. Программа помогает быстро найти нужный м
 - Сайт: [vo-ve.ru](https://vo-ve.ru)
 - Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **0.2.14**
+- Версия: **0.2.16**
 - Сборка: **release Alfa**
 - Платформы текущей поставки: **Windows x64 и Linux amd64**
 
@@ -105,6 +105,11 @@ VO-VE не изменяет графическое содержимое доку
 если его предоставляет файловая система. Перед окончательным удалением имя повторно сверяется
 с уже открытым FD; при неполном доказательстве операция останавливается без удаления.
 
+Корзина VO-VE в Linux требует приватного каталога на том же ресурсе. CIFS-ресурсы,
+которые принудительно задают общего владельца и права каталогов, могут не обеспечивать
+эти гарантии: доступ на запись не означает поддержку Корзины. В 0.2.16 такой отказ
+может оставить незапущенное задание, которое не устраняется F5; это известное ограничение.
+
 ## Что Принципиально Не Входит В Программу
 
 - рисование, ретушь и цветокоррекция;
@@ -169,15 +174,15 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 Готовые сборки находятся в отдельном разделе
 [Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
 
-Текущая версия: **[VO-VE 0.2.14](https://github.com/dercar2/VO-VE/releases/tag/v0.2.14)**.
+Текущая версия: **[VO-VE 0.2.16](https://github.com/dercar2/VO-VE/releases/tag/v0.2.16)**.
 
-- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.14-windows-x64-setup.exe)
-- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.14-windows-x64-portable.zip)
-- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/vo-ve_0.2.14_amd64.deb)
-- [Исходники 0.2.14](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.14-sources.zip)
-- [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.13-notices.zip)
-- [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
-- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.14/SHA256SUMS.txt)
+- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.16-windows-x64-setup.exe)
+- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.16-windows-x64-portable.zip)
+- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/vo-ve_0.2.16_amd64.deb)
+- [Исходники 0.2.16](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.16-sources.zip)
+- [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
+- [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
+- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/SHA256SUMS.txt)
 
 В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет
 `.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
@@ -185,7 +190,7 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 
 ## Сборка Из Исходников
 
-Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.14-sources.zip`
+Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.16-sources.zip`
 на странице релиза. Этот архив содержит производственный исходный код, CMake-файлы,
 используемую приложением графику, определения упаковки и выбранные контуры сторонних библиотек.
 Автоматические ссылки GitHub `Source code (zip)` / `Source code (tar.gz)` содержат снимок
@@ -206,7 +211,7 @@ cmake --build --preset source-release
 Точные исходники внешних зависимостей доступны отдельным вложением
 `VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
 Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером
-базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.14.
+базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.16.
 Тесты, старые экспериментальные интерфейсы, логи и рабочие отчёты в этот компактный снимок не входят.
 
 ## Состояние Проекта
