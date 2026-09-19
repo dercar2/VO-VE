@@ -1,253 +1,203 @@
 # VO-VE
 
+**English** | [Русский](README.ru.md)
+
 **View Only - View Everything**
 
-**VO-VE** - ультралёгкий и быстрый просмотрщик. Концепция базируется на двух основных
-принципах: только просмотр и просмотр всего (View Only - View Everything). Никакого
-редактирования графики, тегов и других мусорных функций.
+**VO-VE** is an ultra-lightweight, fast viewer with a clean, straightforward interface. The concept rests on two principles: view only and view everything (View Only - View Everything). No graphics editing, tags or other junk features, now or ever.
 
-VO-VE создан для дизайнеров, типографий, издательств, специалистов допечатной подготовки и всех,
-кто работает с большими каталогами графических файлов на локальных дисках, файловых серверах и
-NAS. Программа помогает быстро найти нужный макет, узнать его по миниатюре и рассмотреть в большом
-поле просмотра, не открывая тяжёлый графический редактор.
+VO-VE is built for designers, print shops, publishers, prepress specialists and anyone who works with large collections of graphics files on local drives, file servers and
+NAS devices. It helps you quickly find the artwork you need, recognise it by its thumbnail and examine it in a large viewing pane without opening a heavy graphics editor.
 
-- Сайт: [vo-ve.ru](https://vo-ve.ru)
-- Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
-- Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **0.2.17**
-- Сборка: **release Alfa**
-- Платформы текущей поставки: **Windows x64 и Linux amd64**
+- Website: [vo-ve.ru](https://vo-ve.ru) (not ready yet)
+- Repository: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
+- Report a problem: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
+- Version: **0.2.17**
+- Build: **release Alfa**
+- Currently available for: **Windows x64 and Linux amd64**
 
-**[Скачать VO-VE](https://github.com/dercar2/VO-VE/releases/latest)**
+**[Download VO-VE](https://github.com/dercar2/VO-VE/releases/latest)**
 
-## Зачем Нужен VO-VE
+## Why VO-VE Exists
 
-Обычный файловый менеджер показывает имена и стандартные значки. Графический редактор умеет
-открыть документ, но слишком тяжёл для быстрого просмотра сотен макетов. Каталогизаторы требуют
-импорта, базы, тегов и отдельной организации архива.
+An ordinary file manager shows names and standard low-resolution icons. A graphics editor can open a document, but it is too heavy for quickly browsing hundreds of pieces of artwork. Cataloguing tools require imports, a database, tags and a separately organised archive. The closest in spirit are XnView, FastStone, IrfanView or the more elite ACDSee, Adobe Bridge and others. But for a simple viewer, they all have too much functionality and support a limited range of graphics formats (cdr being the biggest problem).
 
-VO-VE занимает промежуточное место: он работает с существующими папками как проводник, но
-показывает содержимое графических документов и макетов прямо в каталоге. Импортировать файлы,
-перестраивать архив или передавать документы в облако не требуется.
+VO-VE sits somewhere in between: it works with existing folders like a file manager, shows the contents of graphic artwork right in the directory, supports formats popular in printing and design, does not annoy you with a bulky interface packed with a million tools and needs almost no setup. Besides, there is no need to import files, rebuild your archive or transfer documents.
 
-## Основные Возможности
+## Main Features
 
-1. Просмотр большинства форматов, актуальных в реальной работе, включая проблемный CDR,
-   документы Adobe, Affinity и открытые графические форматы.
-2. Быстрый просмотр локальных папок, SMB-ресурсов, серверов и NAS без блокировки интерфейса на
-   медленных операциях.
-3. Копирование, перемещение, одиночное и пакетное переименование файлов и папок, удаление
-   с явной обработкой конфликтов и восстановлением прерванных операций. Ctrl+C/Ctrl+V
-   работают с выделенными объектами через системный буфер обмена.
-4. Мгновенный локальный фильтр по имени в открытом каталоге по мере ввода.
-5. Глобальный поиск по имени через Everything в Windows или plocate в Linux.
-6. Постоянное большое поле просмотра, в том числе для многостраничных документов;
-   масштабирование и перемещение загруженного статичного превью без открытия редактора.
-7. Цветная маркировка форматов без наложения ярлыка на само изображение макета.
-8. Мозаика содержимого папки из превью размещённых внутри документов.
-9. Постоянный ограниченный кэш: повторный просмотр без пересчёта тяжёлых файлов.
-10. Управление цветом с учётом встроенных ICC-профилей.
-11. Отображение количества страниц у многостраничного документа и листание страниц.
-12. Четыре темы и оригинальный винтажный интерфейс, вдохновлённый эстетикой электронных схем.
-13. Общий просмотр файлов из дерева подпапок: режим «Глаз» с заметной рамкой области миниатюр.
-14. Естественная сортировка имён (`2, 17, 187`) и сохранение позиции и выделения при возврате в папку.
-15. Дата и время изменения под именем выбранного файла; недавнее время выделяется цветным фоном.
+1. Viewing most formats that matter in real work, including that shitty CDR we all hate,
+   Adobe documents (including InDesign), Affinity and open graphics formats.
+2. Fast browsing of local folders, SMB shares, servers and NAS devices without blocking the interface during slow operations.
+3. Copying, moving, single and batch renaming of files and folders, deletion with explicit conflict handling and recovery of interrupted operations. Ctrl+C/Ctrl+V
+   work with selected items through the system clipboard.
+4. Instant local filtering by name in the current directory as you type.
+5. Global filename search through the incomparable Everything on Windows or plocate on Linux.
+6. By default: opening a file in its native application.
+7. A permanent large viewing pane, including for multipage documents; zooming and panning a loaded static preview without opening an editor.
+8. Colour-coded formats without placing a label over the artwork itself.
+9. Folder mosaics made from previews of the documents inside.
+10. A persistent, size-limited cache: browse again without reprocessing heavy files.
+11. Colour management using embedded ICC profiles.
+12. Page counts and page navigation for multipage documents.
+13. Four themes and an original vintage interface inspired by the aesthetics of circuit boards.
+14. Viewing files from an entire subfolder tree together: "Eye" mode, with a clearly visible border around the thumbnail area (a feature borrowed from Total Commander - Ctrl+B).
+15. Natural filename sorting (`2, 17, 187`) and restoring your position and selection when returning to a folder.
+16. Modification date and time below the selected filename; a recent time is highlighted with a coloured background.
 
-## Поддерживаемые Форматы
+## Supported Formats
 
-| Форматы | Способ просмотра и границы |
+| Formats | Viewing Method and Limits |
 | --- | --- |
-| JPG/JPEG/JFIF, PNG, BMP, GIF, ICO, TIFF | Растровое декодирование |
-| WebP | Decode-only; без кодировщика и вспомогательных инструментов |
-| HEIF/HEIC, AVIF | Основное изображение, ориентация, прозрачность и цветовой профиль |
-| JPEG XL | Первое совмещённое SDR-изображение и ICC-профиль |
-| PDF | Миниатюры, большое превью, число страниц и листание |
-| PDF-совместимый AI | Просмотр через PDF-контур MuPDF |
-| PS, EPS, классический AI | Рендер через отдельно устанавливаемый Ghostscript |
-| CDR | Лучшее встроенное превью без запуска CorelDRAW и без полного векторного рендера |
-| PSD, PSB | Сведённое изображение RGB/CMYK/Lab/Gray; без пересборки слоёв |
-| RAW: CR2, CR3, DNG, NEF, NRW, ORF, PEF, RAF, RW2, SRW, ARW | Встроенный JPEG через PIEX; без демозаики сенсора |
-| SVG, SVGZ | Изолированный рендер через resvg |
-| INDD, INDT | Первое сохранённое внутри документа превью; без рендера вёрстки InDesign |
-| IDML | Первый сохранённый JPEG из XMP; без рендера вёрстки, шрифтов и внешних ссылок |
-| afphoto, afdesign, afpub, af, aftemplate | Сохранённое внутри документа Affinity PNG-превью, если оно присутствует |
-| KRA, ORA | Сохранённое сводное изображение; без пересборки слоёв |
-| XCF 0-19 | Встроенный компактный декодер KImageFormats; NONE/RLE/zlib, без установки GIMP |
-| PLT, HPGL | Ограниченный проверяемый набор команд через hp2xx и SVG-worker |
-| DXF | Сохранённая `THUMBNAILIMAGE` в ASCII DXF; без полноценного CAD-рендера |
+| JPG/JPEG/JFIF, PNG, BMP, GIF, ICO, TIFF | Raster decoding |
+| WebP | Decode-only; no encoder or auxiliary tools |
+| HEIF/HEIC, AVIF | Primary image, orientation, transparency and colour profile |
+| JPEG XL | First composited SDR image and ICC profile |
+| PDF | Thumbnails, large preview, page count and page navigation |
+| PDF-compatible AI | Viewing through the MuPDF PDF pipeline |
+| PS, EPS, classic AI | Rendering through a separately installed Ghostscript |
+| CDR | Best embedded preview without launching CorelDRAW or full vector rendering |
+| PSD, PSB | Flattened RGB/CMYK/Lab/Gray image; no layer recompositing |
+| RAW: CR2, CR3, DNG, NEF, NRW, ORF, PEF, RAF, RW2, SRW, ARW | Embedded JPEG through PIEX; no sensor demosaicing |
+| SVG, SVGZ | Isolated rendering through resvg |
+| INDD, INDT | First preview saved inside the document; no InDesign layout rendering |
+| IDML | First saved JPEG from XMP; no rendering of layouts, fonts or external references |
+| afphoto, afdesign, afpub, af, aftemplate | PNG preview saved inside the Affinity document, if present |
+| KRA, ORA | Saved composite image; no layer recompositing |
+| XCF 0-19 | Compact embedded KImageFormats decoder; NONE/RLE/zlib, no GIMP installation |
+| PLT, HPGL | A limited, verifiable set of commands through hp2xx and the SVG worker |
+| DXF | Saved `THUMBNAILIMAGE` in ASCII DXF; no full CAD rendering |
 
-Расширение файла не считается доказательством формата: обработчик проверяет сигнатуру и структуру
-контейнера. Если функция документа не поддерживается, VO-VE должен показать честный отказ, а не
-правдоподобное, но неправильное изображение.
+A file extension is not considered proof of its format: the handler checks the signature and
+container structure. If a document feature is unsupported, VO-VE should honestly refuse to display it rather than show a plausible but incorrect image.
 
-Поддержка XCF версий 20 и выше отложена до безопасного распознавания эффектов, векторных и
-связанных слоёв. CPT и AKVIS пока не входят в заявленную поддержку.
+Support for XCF versions 20 and above is deferred until effects, vector layers and linked layers can be safely recognised (an enthusiast is welcome to take this on). CPT and AKVIS are not currently included in the declared support.
 
-## Работа С Файлами
+## Working With Files
 
-VO-VE не изменяет графическое содержимое документов, но поддерживает необходимые операции с
-самими файлами и папками:
+VO-VE does not alter the graphic contents of documents, but it supports the necessary operations on the files and folders themselves:
 
-- создание папок, в том числе клавишей F7;
-- одиночное и пакетное переименование;
-- копирование drag-and-drop;
-- перемещение drag-and-drop с зажатым `Shift`;
-- выбор действия при совпадении имён: создать копию, перезаписать или отменить всю операцию;
-- удаление в закреплённую в Избранном Корзину VO-VE, восстановление на исходное
-  место или в другой каталог того же тома, а также явное окончательное удаление;
-- копирование имени и полного пути;
-- открытие документа в системном или выбранном внешнем приложении.
+- creating folders, including with F7;
+- single and batch renaming;
+- copying by drag-and-drop;
+- moving by drag-and-drop while holding `Shift`;
+- choosing what to do when names match: create a copy, overwrite or cancel the entire operation;
+- deleting to the VO-VE Trash pinned in Favourites, restoring to the original location or another directory on the same volume, and explicit permanent deletion;
+- copying the name and full path;
+- opening a document in the system's default application or a chosen external application.
 
-Файловые операции выполняются отдельно от интерфейса. Медленная сеть, обрыв соединения или
-повреждённый документ не должны замораживать главное окно или превращать неопределённый результат
-в сообщение об успехе.
+File operations run separately from the interface. A slow network, a dropped connection or
+a damaged document should not freeze the main window or turn an uncertain result
+into a success message.
 
-В Linux VO-VE использует birth time как дополнительную проверку идентичности объекта,
-если его предоставляет файловая система. Это не исключает все совпадения идентификаторов:
-в тестах выявлен случай быстрого повторного использования inode и birth time на ext4.
-Перед окончательным удалением имя повторно сверяется с уже открытым FD; при неполном
-доказательстве операция останавливается без удаления.
+## What Deliberately Stays Out
 
-Корзина VO-VE в Linux требует приватного каталога на том же ресурсе. CIFS-ресурсы,
-которые принудительно задают общего владельца и права каталогов, могут не обеспечивать
-эти гарантии: доступ на запись не означает поддержку Корзины. В 0.2.17 отказ подготовки
-может быть безопасно завершён, если доказано, что перенос ещё не начинался и объекты не
-изменились. Неопределённые и частично выполненные операции не сбрасываются вслепую.
+- drawing, retouching and colour correction;
+- changing pages, layers or document contents;
+- exporting, converting and resaving graphics;
+- writing EXIF, IPTC and XMP;
+- tags, ratings, collections and media library management;
+- printing (printing is being considered for future implementation), slideshows and a video player;
+- launching native graphics editors to generate previews;
+- user-supplied executable plugins.
 
-Если операция не выполнена из-за блокировки файла другим приложением, появляется краткое
-уведомление. Масштабирование показывает уже полученное превью и не восстанавливает отсутствующие
-в нём детали; воспроизведение анимированного GIF работает отдельно, без масштабирования.
+VO-VE does not replace Photoshop, CorelDRAW, InDesign, Affinity, GIMP or CAD. Its job is to show files quickly and help you work with your existing directory structure.
 
-## Что Принципиально Не Входит В Программу
+## How It Works
 
-- рисование, ретушь и цветокоррекция;
-- изменение страниц, слоёв или содержимого документов;
-- экспорт и пересохранение графики;
-- запись EXIF, IPTC и XMP;
-- теги, рейтинги, коллекции и ведение медиатеки;
-- печать, слайд-шоу и видеоплеер;
-- запуск нативных графических редакторов ради построения превью;
-- пользовательские исполняемые плагины.
+The main code is written in **C++20**, and the interface uses **Qt 6 Widgets**. Small individual adapters are written in C, and the SVG rendering bridge is written in Rust.
 
-VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP или CAD. Его задача - быстро
-показать файлы и помочь работать с существующей структурой каталогов.
+The catalogue, cache, search, file operations and document handlers are separate. Heavy and untrusted files are decoded outside the UI process in separate worker processes with limits on time, memory, input file size and output size. A single handler failing should not close the entire application.
 
-## Как Это Устроено
+Previews are converted to canonical tagged sRGB and saved in a persistent cache. The cache key accounts for the file, profile and processing parameters. When the allocated space is exceeded, old unused
+results are removed; original documents are never touched.
 
-Основной код написан на **C++20**, интерфейс - на **Qt 6 Widgets**. Отдельные компактные адаптеры
-написаны на C, а мост SVG-рендера - на Rust.
+## Components
 
-Каталог, кэш, поиск, файловые операции и обработчики документов разделены. Тяжёлые и недоверенные
-файлы декодируются вне UI-процесса в отдельных worker-процессах с ограничениями времени, памяти,
-размера входного файла и результата. Сбой одного обработчика не должен закрывать всё приложение.
+The distribution uses only the necessary parts of third-party projects:
 
-Превью приводится к каноническому tagged sRGB и сохраняется в постоянный кэш. Ключ кэша учитывает
-файл, профиль и параметры обработки. При превышении выделенного объёма старые неиспользуемые
-результаты удаляются; оригиналы документов никогда не затрагиваются.
-
-## Компоненты
-
-В поставке используются только необходимые части сторонних проектов:
-
-- **Qt 6 Widgets** - интерфейс;
-- **MuPDF** - PDF и PDF-совместимые AI;
-- **Little CMS** - преобразование ICC-профилей;
-- **SQLite и QOI** - индекс и данные постоянного кэша;
-- **resvg** - SVG и SVGZ;
-- **libheif, libde265 и dav1d** - HEIC и AVIF;
+- **Qt 6 Widgets** - interface;
+- **MuPDF** - PDF and PDF-compatible AI;
+- **Little CMS** - ICC profile conversion;
+- **SQLite and QOI** - persistent cache index and data;
+- **resvg** - SVG and SVGZ;
+- **libheif, libde265 and dav1d** - HEIC and AVIF;
 - **libjxl** - JPEG XL;
 - **libwebp** - WebP;
-- **PIEX** - встроенные превью RAW;
-- **pugixml** - ограниченный разбор метаданных InDesign;
-- **KImageFormats XCF reader** - встроенный просмотр XCF;
-- **miniz** - сжатые записи CDR, KRA, ORA и XCF;
-- **GNU hp2xx** - ограниченный PLT/HPGL-контур;
-- **utf8proc** - корректная работа с Unicode-именами файлов.
+- **PIEX** - embedded RAW previews;
+- **pugixml** - limited parsing of InDesign metadata;
+- **KImageFormats XCF reader** - embedded XCF viewing;
+- **miniz** - compressed entries in CDR, KRA, ORA and XCF;
+- **GNU hp2xx** - limited PLT/HPGL pipeline;
+- **utf8proc** - correct handling of Unicode filenames.
 
-Точные версии, границы линковки и лицензии перечисляются в `THIRD_PARTY_NOTES.md`.
+Exact versions, linking boundaries and licences are listed in `THIRD_PARTY_NOTES.md`.
 
-Отдельно устанавливаются:
+Installed separately:
 
-- **Ghostscript** - нужен для PS, EPS и классических AI;
-- **LINE Seed JP** - авторский шрифт интерфейса;
-- **Everything** в Windows - с безграничной благодарностью и уважением используется для
-  мгновенного глобального поиска;
-- **plocate** в Linux - глобальный поиск по индексу;
-- **OpenSSL** из репозитория Linux - проверка подписей обновлений.
+- **Ghostscript** - required for PS, EPS and classic AI;
+- **LINE Seed JP** - the chosen typeface for the interface;
+- **Everything** on Windows - used for instant global search, with boundless gratitude and respect;
+- **plocate** on Linux - global index-based search;
+- **OpenSSL** from the Linux repository - update signature verification.
 
-Ни один нативный графический редактор не требуется и не запускается для построения превью.
+No native graphics editor is required or launched to generate previews.
 
-## Установка
+## Installation
 
-Готовые сборки находятся в отдельном разделе
-[Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
+Ready-to-use builds are in the separate
+[Releases](https://github.com/dercar2/VO-VE/releases) section, not mixed in with the source files.
 
-Текущая версия: **[VO-VE 0.2.17](https://github.com/dercar2/VO-VE/releases/tag/v0.2.17)**.
+Current version: **[VO-VE 0.2.17](https://github.com/dercar2/VO-VE/releases/tag/v0.2.17)**.
 
-- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.17-windows-x64-setup.exe)
+- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.17-windows-x64-setup.exe)
 - [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.17-windows-x64.zip)
-- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/vo-ve_0.2.17_amd64.deb)
-- [Исходники 0.2.17](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.17-sources.zip)
-- [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.13-notices.zip)
-- [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
-- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/SHA256SUMS.txt)
+- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/vo-ve_0.2.17_amd64.deb)
+- [Source code 0.2.17](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.17-sources.zip)
+- [Licences and notices](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.13-notices.zip)
+- [Dependency sources](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/VO-VE-0.2.13-dependency-sources.zip) (for building, not needed for a normal installation)
+- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v0.2.17/SHA256SUMS.txt)
 
-В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет
-`.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
-по явному выбору пользователя.
+Windows uses a single `.exe` installer. The current Linux distribution is an amd64 `.deb` package. Additional components are not disguised as part of VO-VE and are installed only
+when explicitly selected by the user.
 
-## Сборка Из Исходников
+## Building From Source
 
-Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.17-sources.zip`
-на странице релиза. Этот архив содержит производственный исходный код, CMake-файлы,
-используемую приложением графику, определения упаковки и выбранные контуры сторонних библиотек.
-Автоматические ссылки GitHub `Source code (zip)` / `Source code (tar.gz)` содержат снимок
-публичного репозитория; пока код не перенесён в Git, для сборки используйте указанное вложение.
-Скомпилированные объекты, кэши инструментов, приватные тестовые корпуса и готовые релизные
-бинарники в историю Git не входят.
+The complete source code for the published build is available as `VO-VE-0.2.17-sources.zip` on the release page. This archive contains production source code, CMake files, artwork used by the application, packaging definitions and selected parts of third-party libraries.
+GitHub's automatic `Source code (zip)` / `Source code (tar.gz)` links contain a snapshot of the public repository; until the code is moved into Git, use the specified release attachment to build the application.
+Compiled objects, tool caches, private test corpora and ready-built release binaries are not included in the Git history.
 
-Базовая headless-сборка:
+Basic headless build:
 
 ```sh
 cmake --preset source-release
 cmake --build --preset source-release
 ```
 
-Полная сборка интерфейса и всех обработчиков требует Qt и закреплённых зависимостей. Точная
-сборочная цепочка описана в `BUILDING.md` внутри архива; версии и контрольные суммы зависимостей - в
-`THIRD_PARTY_NOTES.md` и `docs/dependencies`.
-Точные исходники внешних зависимостей доступны отдельным вложением
-`VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
-Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером
-базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.17.
-Тесты, старые экспериментальные интерфейсы, логи и рабочие отчёты в этот компактный снимок не входят.
+Building the full interface and all handlers requires Qt and the pinned dependencies. The exact build toolchain is described in `BUILDING.md` inside the archive; dependency versions and checksums are in
+`THIRD_PARTY_NOTES.md` and `docs/dependencies`.
+The exact sources of external dependencies are available as a separate attachment,
+`VO-VE-0.2.13-dependency-sources.zip`, on the release page.
+The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 0.2.17 sources.
 
-## Состояние Проекта
+## Project Status
 
-VO-VE находится на стадии **release Alfa**. Основная функциональность реализована и используется
-в реальной работе на Windows и Linux. Продолжаются полевая проверка, визуальная доводка и
-расширение корпуса реальных документов.
+VO-VE is at the **release Alfa** stage. The core functionality is implemented and used in real work on Windows and Linux. Field testing, visual refinement and
+expansion of the real-document test corpus continue.
 
-Проект сознательно остаётся узким. Новая функция принимается только тогда, когда она помогает
-просмотру или работе с файлами и не разрушает основные требования: компактность, скорость,
-стабильность и предсказуемое поведение на локальных и сетевых ресурсах.
+The project deliberately stays focused. A new feature is accepted only when it helps with viewing or working with files and does not undermine the core requirements: compactness, speed, stability and predictable behaviour on local and network resources.
 
-## Авторы
+## Authors
 
-- Автор идеи и дизайн: **dercar** - [dercar@ya.com](mailto:dercar@ya.com)
-- Программирование: **Rubilaks**
-- Участники: пока сторонних участников нет
+- Idea and design: **dercar** - [dercar@ya.com](mailto:dercar@ya.com)
+- Programming: **Rubilaks**
+- Contributors: no outside contributors yet
 
-Вдохновлено славными идеями и недостатками XnView, Geeqie, Total Commander и бесподобным
-Everything.
+Inspired by the fine ideas and shortcomings of XnView, Geeqie, Total Commander and the incomparable Everything.
 
-## Лицензия
+## Licence
 
-VO-VE распространяется по лицензии **GPL-3.0-or-later**. Можно использовать, изучать, копировать,
-изменять и распространять программу, в том числе за плату, при соблюдении условий GPL. Производные
-версии также должны сохранять свободу доступа к исходному коду на условиях GPL.
+VO-VE is distributed under **GPL-3.0-or-later**. You may use, study, copy, modify and distribute the program, including for peanuts, as long as you comply with the GPL. Derivative versions must also preserve the freedom to access the source code under the GPL.
 
-Сторонние компоненты сохраняют собственные лицензии и уведомления.
-В частности, PDF-worker включает MuPDF под AGPL-3.0-or-later; условия этой части не заменяются
-одной только GPL проекта. Полные тексты и уведомления доступны во вложении
-`VO-VE-0.2.13-notices.zip` и должны сопровождать бинарники при дальнейшем распространении.
+Third-party components retain their own licences and notices.
+In particular, the PDF worker includes MuPDF under AGPL-3.0-or-later; the terms for this part are not replaced by the project's GPL alone. Full texts and notices are available in `VO-VE-0.2.13-notices.zip` and must accompany the binaries when redistributed.
