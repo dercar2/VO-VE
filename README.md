@@ -12,7 +12,7 @@ NAS devices. It helps you quickly find the artwork you need, recognise it by its
 - Website: [vo-ve.ru](https://vo-ve.ru) (not ready yet)
 - Repository: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Report a problem: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Version: **0.2.18**
+- Version: **0.2.19**
 - Build: **release Alfa**
 - Currently available for: **Windows x64 and Linux amd64**
 
@@ -148,37 +148,37 @@ No native graphics editor is required or launched to generate previews.
 Ready-to-use builds are in the separate
 [Releases](https://github.com/dercar2/VO-VE/releases) section, not mixed in with the source files.
 
-Current version: **[VO-VE 0.2.18](https://github.com/dercar2/VO-VE/releases/tag/v0.2.18)**.
+Current version: **[VO-VE 0.2.19](https://github.com/dercar2/VO-VE/releases/tag/v0.2.19)**.
 
-- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/VO-VE-0.2.18-windows-x64-setup.exe)
-- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/VO-VE-0.2.18-windows-x64.zip)
-- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/vo-ve_0.2.18_amd64.deb)
-- [Source code 0.2.18](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/VO-VE-0.2.18-sources.zip)
+- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/VO-VE-0.2.19-windows-x64-setup.exe)
+- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/vo-ve_0.2.19_amd64.deb)
+- [Source code 0.2.19](https://github.com/dercar2/VO-VE/tree/v0.2.19/Source)
 - [Licences and notices](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
 - [Dependency sources](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (for building, not needed for a normal installation)
-- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/SHA256SUMS.txt)
+- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/SHA256SUMS.txt)
 
 Windows uses a single `.exe` installer. The current Linux distribution is an amd64 `.deb` package. Additional components are not disguised as part of VO-VE and are installed only
 when explicitly selected by the user.
 
 ## Building From Source
 
-The complete source code for the published build is available as `VO-VE-0.2.18-sources.zip` on the release page. This archive contains production source code, CMake files, artwork used by the application, packaging definitions and selected parts of third-party libraries.
-GitHub's automatic `Source code (zip)` / `Source code (tar.gz)` links contain a snapshot of the public repository; until the code is moved into Git, use the specified release attachment to build the application.
+The complete source code for the published build is in [Source](Source). This directory contains production source code, CMake files, artwork used by the application, packaging definitions and selected parts of third-party libraries.
+GitHub's automatic `Source code (zip)` / `Source code (tar.gz)` links on the release page include this directory at the release tag. No separate application source archive is needed.
 Compiled objects, tool caches, private test corpora and ready-built release binaries are not included in the Git history.
 
 Basic headless build:
 
 ```sh
+cd Source
 cmake --preset source-release
 cmake --build --preset source-release
 ```
 
-Building the full interface and all handlers requires Qt and the pinned dependencies. The exact build toolchain is described in `BUILDING.md` inside the archive; dependency versions and checksums are in
-`THIRD_PARTY_NOTES.md` and `docs/dependencies`.
+Building the full interface and all handlers requires Qt and the pinned dependencies. The exact build toolchain is described in [Source/BUILDING.md](Source/BUILDING.md); dependency versions and checksums are in
+`Source/THIRD_PARTY_NOTES.md` and `Source/docs/dependencies`.
 The exact sources of external dependencies are available as a separate attachment,
 `VO-VE-0.2.13-dependency-sources.zip`, on the release page.
-The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 0.2.18 sources.
+The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 0.2.19 sources.
 
 ## Project Status
 

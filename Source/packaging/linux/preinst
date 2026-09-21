@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+
+install_root=/usr/lib/vo-ve
+update_marker=/run/lock/vo-ve-package-update
+
+restore_launch_permissions() {
+    for installed in "$install_root"/vove-*; do
+        [ -e "$installed" ] || continue
+        chmod 0755 "$installed" 2>/dev/null || true
+    done
+}
+
+mkdir -p "${update_marker%/*}"
+: >"$update_marker"
+chmod 0644 "$update_marker"
+
+# Old releases do not know about the marker. Removing execute permission closes the
+# preinst-to-unpack launch window; the new UI also refuses to start while the marker exists.
+for installed in "$install_root"/vove-*; do
+    [ -e "$installed" ] || continue
+    if ! chmod a-x "$installed"; then
+        restore_launch_permissions
+        rm -f "$update_marker"
+        echo 'VO-VE package update guard could not lock the installed runtime.' >&2
+        exit 1
+    fi
+done
+
+# Never replace protocol-coupled executables underneath a live installed VO-VE process.
+for executable_link in /proc/[0-9]*/exe; do
+    target=$(readlink "$executable_link" 2>/dev/null || true)
+    [ -n "$target" ] || continue
+    target=${target% (deleted)}
+    case "$target" in
+        "$install_root"/vove-*)
+            restore_launch_permissions
+            rm -f "$update_marker"
+            echo 'VO-VE is running; close it before installing or updating the package.' >&2
+            exit 1
+            ;;
+    esac
+done
+
+exit 0

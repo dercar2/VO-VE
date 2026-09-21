@@ -1,0 +1,147 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "VOVE_BUILD_TESTS": "ON",
+        "VOVE_BUILD_BENCHMARKS": "ON",
+        "VOVE_BUILD_QT_SPIKE": "OFF",
+        "VOVE_BUILD_WIN32_SPIKE": "OFF"
+      }
+    },
+    {
+      "name": "msvc-debug",
+      "inherits": "base",
+      "displayName": "MSVC headless Debug",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "ninja-debug",
+      "inherits": "base",
+      "displayName": "Ninja headless Debug",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "ninja-release",
+      "inherits": "base",
+      "displayName": "Ninja headless Release",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "source-release",
+      "inherits": "ninja-release",
+      "displayName": "Lean source snapshot Release",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF",
+        "VOVE_BUILD_TESTS": "OFF",
+        "VOVE_BUILD_BENCHMARKS": "OFF"
+      }
+    },
+    {
+      "name": "linux-release",
+      "inherits": "base",
+      "displayName": "Linux complete Release runtime",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "VOVE_BUILD_TESTS": "OFF",
+        "VOVE_BUILD_BENCHMARKS": "OFF",
+        "VOVE_BUILD_QT_APP": "ON",
+        "VOVE_BUILD_MUPDF_DOCUMENT_WORKER": "ON",
+        "VOVE_BUILD_RESVG_SVG_WORKER": "ON",
+        "VOVE_EXPECT_STRICT_SANDBOX": "ON",
+        "VOVE_RELEASE_BUILD": "ON",
+        "VOVE_HEIC_DECODE_ROOT": "$env{VOVE_HEIC_DECODE_ROOT}",
+        "VOVE_HEIC_TEST_SOURCE_ROOT": "$env{VOVE_HEIC_TEST_SOURCE_ROOT}",
+        "VOVE_WEBP_DECODE_ROOT": "$env{VOVE_WEBP_DECODE_ROOT}",
+        "VOVE_WEBP_TEST_SOURCE_ROOT": "$env{VOVE_WEBP_TEST_SOURCE_ROOT}",
+        "VOVE_JPEGXL_DECODE_ROOT": "$env{VOVE_JPEGXL_DECODE_ROOT}",
+        "VOVE_MUPDF_SOURCE_ROOT": "$env{VOVE_MUPDF_SOURCE_ROOT}",
+        "VOVE_MUPDF_SOURCE_ARCHIVE": "$env{VOVE_MUPDF_SOURCE_ARCHIVE}",
+        "VOVE_MUPDF_LIBRARY": "$env{VOVE_MUPDF_LIBRARY}",
+        "VOVE_MUPDF_THIRD_LIBRARY": "$env{VOVE_MUPDF_THIRD_LIBRARY}",
+        "VOVE_RESVG_BRIDGE_LIBRARY": "$env{VOVE_RESVG_BRIDGE_LIBRARY}"
+      }
+    },
+    {
+      "name": "linux-verification",
+      "inherits": "linux-release",
+      "displayName": "Linux complete verification runtime",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "VOVE_BUILD_TESTS": "ON",
+        "VOVE_RELEASE_BUILD": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "source-release",
+      "configurePreset": "source-release"
+    },
+    {
+      "name": "msvc-debug",
+      "configurePreset": "msvc-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-debug",
+      "configurePreset": "ninja-debug"
+    },
+    {
+      "name": "ninja-release",
+      "configurePreset": "ninja-release"
+    },
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-release"
+    },
+    {
+      "name": "linux-verification",
+      "configurePreset": "linux-verification"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "msvc-debug",
+      "configurePreset": "msvc-debug",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ninja-debug",
+      "configurePreset": "ninja-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-verification",
+      "configurePreset": "linux-verification",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

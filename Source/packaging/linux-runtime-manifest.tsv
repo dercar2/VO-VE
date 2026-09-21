@@ -1,0 +1,21 @@
+# kind|path|source-or-target|strip|owner|reason
+file|usr/lib/vo-ve/vove-ui-qt|{build}/src/ui/qt/vove-ui-qt|all|VO-VE UI|Main application executable
+file|usr/lib/vo-ve/vove-catalog-helper|{build}/vove-catalog-helper|all|VO-VE catalog|Isolated directory enumeration helper
+file|usr/lib/vo-ve/vove-fileop-helper|{build}/vove-fileop-helper|all|VO-VE file operations|Typed helper for explicit user-authorized file mutations
+file|usr/lib/vo-ve/vove-open-helper|{build}/src/ui/qt/vove-open-helper|all|VO-VE desktop integration|Bounded external opener isolated from shell stalls
+file|usr/lib/vo-ve/vove-plocate-helper|{build}/vove-plocate-helper|all|VO-VE global search|Lazy bounded adapter for an optional system plocate index
+file|usr/lib/vo-ve/vove-preview-helper|{build}/vove-preview-helper|all|VO-VE preview pipeline|Lazy authenticated cache and decoder coordinator
+file|usr/lib/vo-ve/vove-raster-worker|{build}/vove-raster-worker|all|VO-VE raster handlers|Sandboxed decode-only raster worker
+file|usr/lib/vo-ve/vove-xcf-worker|{build}/vove-xcf-worker|all|VO-VE XCF handler|Lazy isolated embedded KImageFormats XCF decoder
+file|usr/lib/vo-ve/vove-document-worker|{build}/vove-document-worker|all|VO-VE document handlers|Sandboxed PDF and PDF-compatible AI renderer
+file|usr/lib/vo-ve/vove-cdr-worker|{build}/vove-cdr-worker|all|VO-VE CDR handler|Sandboxed embedded-preview extractor for CDR containers
+file|usr/lib/vo-ve/vove-svg-worker|{build}/vove-svg-worker|all|VO-VE SVG handler|Lazy one-shot SVG and SVGZ renderer
+file|usr/lib/vo-ve/translations/vove_ru.qm|{build}/src/ui/qt/translations/vove_ru.qm|none|VO-VE localization|Russian application and Qt Widgets language pack
+file|usr/lib/vo-ve/translations/vove_zh_CN.qm|{build}/src/ui/qt/translations/vove_zh_CN.qm|none|VO-VE localization|Simplified Chinese application and Qt Widgets language pack
+file|usr/lib/vo-ve/translations/vove_ar.qm|{build}/src/ui/qt/translations/vove_ar.qm|none|VO-VE localization|Arabic application and Qt Widgets language pack
+symlink|usr/bin/vo-ve|../lib/vo-ve/vove-ui-qt|none|VO-VE launcher|Stable command and desktop-entry target
+file|usr/share/applications/vo-ve.desktop|{project}/packaging/linux/vo-ve.desktop|none|VO-VE desktop integration|System menu entry and non-default MIME handler declaration
+file|usr/share/icons/hicolor/512x512/apps/vo-ve.png|{project}/packaging/linux/vo-ve.png|none|VO-VE artwork|Approved application logo rendered from the author vector
+file|usr/share/doc/vo-ve/LICENSE|{project}/LICENSE|none|VO-VE project|Project license notice
+file|usr/share/doc/vo-ve/THIRD_PARTY_NOTES.md|{project}/THIRD_PARTY_NOTES.md|none|VO-VE project|Third-party component notices
+file|usr/share/vo-ve/runtime-manifest.tsv|{project}/packaging/linux-runtime-manifest.tsv|none|VO-VE release|Strict package allowlist ownership and justification

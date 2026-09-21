@@ -1,0 +1,14 @@
+#pragma once
+
+namespace vove::ui::updates::build_config {
+
+inline constexpr auto application_version = R"vove_config(@PROJECT_VERSION@)vove_config";
+inline constexpr auto manifest_url = R"vove_config(@VOVE_UPDATE_MANIFEST_URL@)vove_config";
+inline constexpr auto public_key_base64 =
+    R"vove_config(@VOVE_UPDATE_PUBLIC_KEY_BASE64@)vove_config";
+inline constexpr auto repository_url = R"vove_config(@VOVE_REPOSITORY_URL@)vove_config";
+inline constexpr auto releases_api_url = R"vove_config(@VOVE_RELEASES_API_URL@)vove_config";
+inline constexpr auto donate_url = R"vove_config(@VOVE_DONATE_URL@)vove_config";
+inline constexpr auto issue_url = R"vove_config(@VOVE_ISSUE_URL@)vove_config";
+
+} // namespace vove::ui::updates::build_config

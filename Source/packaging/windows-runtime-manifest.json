@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "platform": "windows-x64",
+  "files": [
+    {
+      "path": "vove-ui-qt.exe",
+      "source": "{build}/src/ui/qt/vove-ui-qt.exe",
+      "strip": "all",
+      "owner": "VO-VE UI",
+      "reason": "Main application executable"
+    },
+    {
+      "path": "vove-catalog-helper.exe",
+      "source": "{build}/vove-catalog-helper.exe",
+      "strip": "all",
+      "owner": "VO-VE catalog",
+      "reason": "Isolated directory enumeration helper"
+    },
+    {
+      "path": "vove-everything-helper.exe",
+      "source": "{build}/vove-everything-helper.exe",
+      "strip": "all",
+      "owner": "VO-VE global search",
+      "reason": "Lazy bounded IPC adapter for a separately installed Everything service"
+    },
+    {
+      "path": "vove-fileop-helper.exe",
+      "source": "{build}/vove-fileop-helper.exe",
+      "strip": "all",
+      "owner": "VO-VE file operations",
+      "reason": "One-shot typed helper for explicit user-authorized file mutations"
+    },
+    {
+      "path": "vove-open-helper.exe",
+      "source": "{build}/src/ui/qt/vove-open-helper.exe",
+      "strip": "all",
+      "owner": "VO-VE desktop integration",
+      "reason": "One-shot system opener and file revealer isolated from SMB shell-extension stalls"
+    },
+    {
+      "path": "vove-preview-helper.exe",
+      "source": "{build}/vove-preview-helper.exe",
+      "strip": "all",
+      "owner": "VO-VE preview pipeline",
+      "reason": "Lazy authenticated cache and decoder coordinator"
+    },
+    {
+      "path": "vove-raster-worker.exe",
+      "source": "{build}/vove-raster-worker.exe",
+      "strip": "all",
+      "owner": "VO-VE raster handlers",
+      "reason": "Sandboxed decode-only raster worker"
+    },
+    {
+      "path": "vove-xcf-worker.exe",
+      "source": "{build}/vove-xcf-worker.exe",
+      "strip": "all",
+      "owner": "VO-VE XCF handler",
+      "reason": "Lazy isolated embedded KImageFormats XCF decoder"
+    },
+    {
+      "path": "vove-document-worker.exe",
+      "source": "{build}/vove-document-worker.exe",
+      "strip": "all",
+      "owner": "VO-VE document handlers",
+      "reason": "Lazy sandboxed PDF and PDF-compatible AI renderer"
+    },
+    {
+      "path": "vove-cdr-worker.exe",
+      "source": "{build}/vove-cdr-worker.exe",
+      "strip": "all",
+      "owner": "VO-VE CDR handler",
+      "reason": "Lazy one-shot embedded-preview extractor for CDR containers"
+    },
+    {
+      "path": "vove-svg-worker.exe",
+      "source": "{build}/vove-svg-worker.exe",
+      "strip": "all",
+      "owner": "VO-VE SVG handler",
+      "reason": "Lazy one-shot SVG and SVGZ renderer"
+    },
+    {
+      "path": "Qt6Core.dll",
+      "source": "{qt}/bin/Qt6Core.dll",
+      "owner": "Qt runtime",
+      "reason": "Required Qt core runtime"
+    },
+    {
+      "path": "Qt6Gui.dll",
+      "source": "{qt}/bin/Qt6Gui.dll",
+      "owner": "Qt runtime",
+      "reason": "Required Qt GUI runtime"
+    },
+    {
+      "path": "Qt6Network.dll",
+      "source": "{qt}/bin/Qt6Network.dll",
+      "owner": "Qt runtime",
+      "reason": "Local single-instance IPC and manual signed HTTPS update checks; no WebEngine"
+    },
+    {
+      "path": "Qt6Widgets.dll",
+      "source": "{qt}/bin/Qt6Widgets.dll",
+      "owner": "Qt runtime",
+      "reason": "Required Qt Widgets runtime"
+    },
+    {
+      "path": "platforms/qwindows.dll",
+      "source": "{qt}/plugins/platforms/qwindows.dll",
+      "owner": "Qt runtime",
+      "reason": "Windows platform integration plugin"
+    },
+    {
+      "path": "tls/qschannelbackend.dll",
+      "source": "{qt}/plugins/tls/qschannelbackend.dll",
+      "owner": "Qt runtime",
+      "reason": "Manual HTTPS update checks using Windows Schannel and system certificates; no bundled OpenSSL"
+    },
+    {
+      "path": "imageformats/qjpeg.dll",
+      "source": "{qt}/plugins/imageformats/qjpeg.dll",
+      "owner": "Qt runtime",
+      "reason": "Sandboxed JPEG decoding without Windows metadata-handler stalls"
+    },
+    {
+      "path": "translations/vove_ru.qm",
+      "source": "{build}/src/ui/qt/translations/vove_ru.qm",
+      "owner": "VO-VE localization",
+      "reason": "Complete Russian application and Qt Widgets language pack"
+    },
+    {
+      "path": "translations/vove_zh_CN.qm",
+      "source": "{build}/src/ui/qt/translations/vove_zh_CN.qm",
+      "owner": "VO-VE localization",
+      "reason": "Complete Simplified Chinese application and Qt Widgets language pack"
+    },
+    {
+      "path": "translations/vove_ar.qm",
+      "source": "{build}/src/ui/qt/translations/vove_ar.qm",
+      "owner": "VO-VE localization",
+      "reason": "Complete Arabic application and Qt Widgets language pack"
+    },
+    {
+      "path": "libc++.dll",
+      "source": "{llvm}/libc++.dll",
+      "owner": "LLVM-MinGW runtime",
+      "reason": "C++ standard library runtime"
+    },
+    {
+      "path": "libunwind.dll",
+      "source": "{llvm}/libunwind.dll",
+      "owner": "LLVM-MinGW runtime",
+      "reason": "Required exception-unwinding runtime"
+    },
+    {
+      "path": "LICENSE",
+      "source": "{project}/LICENSE",
+      "owner": "VO-VE project",
+      "reason": "Project license notice"
+    },
+    {
+      "path": "vo-ve-light.ico",
+      "source": "{project}/packaging/windows/vo-ve-light.ico",
+      "owner": "VO-VE artwork",
+      "reason": "Light launcher artwork for dark Windows shell"
+    },
+    {
+      "path": "vo-ve-dark.ico",
+      "source": "{project}/packaging/windows/vo-ve-dark.ico",
+      "owner": "VO-VE artwork",
+      "reason": "Dark launcher artwork for light Windows shell"
+    },
+    {
+      "path": "THIRD_PARTY_NOTES.md",
+      "source": "{project}/THIRD_PARTY_NOTES.md",
+      "owner": "VO-VE project",
+      "reason": "Mandatory third-party component notices"
+    },
+    {
+      "path": "runtime-manifest.json",
+      "source": "{project}/packaging/windows-runtime-manifest.json",
+      "owner": "VO-VE release",
+      "reason": "Machine-readable allowlist, ownership and runtime justification"
+    }
+  ]
+}

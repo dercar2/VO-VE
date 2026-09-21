@@ -1,0 +1,12 @@
+"""Build-local Meson entry point, including Ninja regeneration invocations."""
+import os
+import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, r'@VOVE_HEIC_MESON_MODULE_DIR@')
+os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
+os.environ['NINJA'] = r'@CMAKE_MAKE_PROGRAM@'
+
+from mesonbuild.mesonmain import main
+
+sys.exit(main())

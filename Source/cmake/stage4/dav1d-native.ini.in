@@ -1,0 +1,8 @@
+[binaries]
+c = '@CMAKE_C_COMPILER@'
+ar = '@CMAKE_AR@'
+strip = '@CMAKE_STRIP@'
+nasm = '@VOVE_HEIC_NASM@'
+
+[built-in options]
+c_args = ['-ffunction-sections', '-fdata-sections']

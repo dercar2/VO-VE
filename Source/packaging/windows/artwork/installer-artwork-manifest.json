@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "version": "0.2.19",
+  "generator": {
+    "path": "scripts/generate_installer_artwork.py",
+    "sha256": "87c4791ca714d903f7757b0394a636570a940b10f69f6f118454cf3c3d6618e4"
+  },
+  "inputs": [
+    {
+      "path": "design/Font/LINESeedJP-Bold.ttf",
+      "sha256": "d7baef3d9d1b5d3144063128890f1f80c7d3c88225697d6a4bce4fe55957e31e"
+    },
+    {
+      "path": "design/Font/LINESeedJP-Regular.ttf",
+      "sha256": "167611a1f3dd3bc5b6a0beb47c20d15d930f63abdc0e5f035adbe1b4b6ef360d"
+    },
+    {
+      "path": "design/Install.ai",
+      "sha256": "c73ded64ae3818ea59dc407fe993ea06ec1c84e8758d78cc289e949a12a63172"
+    },
+    {
+      "path": "src/ui/qt/artwork/logo-vanilla.png",
+      "sha256": "c24ca884bb14b0fcaa74044e6d925a644032ccbf80ded477720ceb6ec391b771"
+    }
+  ],
+  "files": [
+    {
+      "path": "installer-background-en.png",
+      "bytes": 157122,
+      "sha256": "be8a224ea1987c9f1b3e7b8de7403149dbbbc97ab9c658ee758eabe99981d65b"
+    },
+    {
+      "path": "installer-background-ru.png",
+      "bytes": 174868,
+      "sha256": "df92e7d1ccba8efbff6f75e850be03e53dfab6a2e20225cb9bda8cf04b47174e"
+    },
+    {
+      "path": "installer-download-disabled-en.png",
+      "bytes": 2241,
+      "sha256": "ca1cb6d8854a01b7b68fb4c1d081923a06d36acc35ef1e9adf4c7b9db66006a7"
+    },
+    {
+      "path": "installer-download-disabled-ru.png",
+      "bytes": 2105,
+      "sha256": "29cc77636f86e1a98599e200a03e72ec7e4240ef3ce58a13aeae7587a8e641e2"
+    },
+    {
+      "path": "installer-download-en.png",
+      "bytes": 2586,
+      "sha256": "5bb39873abb45ab7225dbbaa999cb9fa8fd4d4aacd2d3a02f40ae2a755feae75"
+    },
+    {
+      "path": "installer-download-ru.png",
+      "bytes": 2449,
+      "sha256": "ae5e1881164eb093ba32441e0db3902acc1719f9242f268c50d7d682df4c2798"
+    },
+    {
+      "path": "installer-install-disabled-en.png",
+      "bytes": 1659,
+      "sha256": "763a107da7cfab022480c82a91631b2941c901be9b133eee2538de0ded2fe959"
+    },
+    {
+      "path": "installer-install-disabled-ru.png",
+      "bytes": 2538,
+      "sha256": "4bf01005ef4d1bebe77ff1f6ac782a77a4daaa452ae6ada70597a3d99c8269d3"
+    },
+    {
+      "path": "installer-install-en.png",
+      "bytes": 1888,
+      "sha256": "485f64acbb446ebcf3aa37e915447eeeacaa0c42fcd4b7b7e656bdc82aac3db4"
+    },
+    {
+      "path": "installer-install-ru.png",
+      "bytes": 2997,
+      "sha256": "b0bbd657eeeef75d0515fd0984e0dacdac4baec2d68530abdeaab609d392ba3a"
+    },
+    {
+      "path": "installer-status-missing-en.png",
+      "bytes": 1260,
+      "sha256": "3665c7985ca81b842cb2ec021bcce2f2c96959334d7a71ea6da60079ba38b782"
+    },
+    {
+      "path": "installer-status-missing-ru.png",
+      "bytes": 1586,
+      "sha256": "9c9f28fb272bbc61d1f974573065c9d422b9bafe9713acde75a4e2b250cb8acc"
+    },
+    {
+      "path": "installer-status-present-en.png",
+      "bytes": 1239,
+      "sha256": "9101f5605b28b31e0b26c139bdbbd308db7e4d4f5e81859e3d2f1cd601c99322"
+    },
+    {
+      "path": "installer-status-present-ru.png",
+      "bytes": 935,
+      "sha256": "24756e028d6d6b38c76a41daca20ae332cde10bedf2f75a68b2b76ae6a9c7f08"
+    },
+    {
+      "path": "installer-toggle-off.png",
+      "bytes": 417,
+      "sha256": "d17935625138fede0b1ad653ace2d97099a23a612cd96494e6e61b1f6eee77cb"
+    },
+    {
+      "path": "installer-toggle-on.png",
+      "bytes": 422,
+      "sha256": "30707dc93ddfeeb170414823cb9b70cec5e8b5080ac709622512c2e53b722eca"
+    }
+  ]
+}

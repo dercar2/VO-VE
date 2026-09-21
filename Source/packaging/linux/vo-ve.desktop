@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=VO-VE
+GenericName=File Viewer
+Comment=View documents and images without graphics editing
+Exec=vo-ve %F
+Icon=vo-ve
+Terminal=false
+Categories=Graphics;Viewer;
+MimeType=image/jpeg;image/png;image/gif;image/tiff;image/webp;image/heif;application/pdf;application/illustrator;image/x-eps;application/postscript;application/vnd.corel-draw;image/vnd.adobe.photoshop;
+StartupNotify=true
+StartupWMClass=VO-VE
+DBusActivatable=false

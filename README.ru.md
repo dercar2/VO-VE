@@ -12,7 +12,7 @@ NAS. Программа помогает быстро найти нужный м
 - Сайт: [vo-ve.ru](https://vo-ve.ru) (пока не готов)
 - Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **0.2.18**
+- Версия: **0.2.19**
 - Сборка: **release Alfa**
 - Платформы текущей поставки: **Windows x64 и Linux amd64**
 
@@ -148,37 +148,37 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 Готовые сборки находятся в отдельном разделе
 [Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
 
-Текущая версия: **[VO-VE 0.2.18](https://github.com/dercar2/VO-VE/releases/tag/v0.2.18)**.
+Текущая версия: **[VO-VE 0.2.19](https://github.com/dercar2/VO-VE/releases/tag/v0.2.19)**.
 
-- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/VO-VE-0.2.18-windows-x64-setup.exe)
-- [Windows x64 Portable](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/VO-VE-0.2.18-windows-x64.zip)
-- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/vo-ve_0.2.18_amd64.deb)
-- [Исходники 0.2.18](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/VO-VE-0.2.18-sources.zip)
+- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/VO-VE-0.2.19-windows-x64-setup.exe)
+- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/vo-ve_0.2.19_amd64.deb)
+- [Исходники 0.2.19](https://github.com/dercar2/VO-VE/tree/v0.2.19/Source)
 - [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
 - [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
-- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.18/SHA256SUMS.txt)
+- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/SHA256SUMS.txt)
 
 В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет `.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
 по явному выбору пользователя.
 
 ## Сборка Из Исходников
 
-Полные исходники именно опубликованной сборки доступны во вложении `VO-VE-0.2.18-sources.zip` на странице релиза. Этот архив содержит производственный исходный код, CMake-файлы, используемую приложением графику, определения упаковки и выбранные контуры сторонних библиотек.
-Автоматические ссылки GitHub `Source code (zip)` / `Source code (tar.gz)` содержат снимок публичного репозитория; пока код не перенесён в Git, для сборки используйте указанное вложение.
+Полные исходники именно опубликованной сборки находятся в папке [Source](Source). Она содержит производственный исходный код, CMake-файлы, используемую приложением графику, определения упаковки и выбранные контуры сторонних библиотек.
+Автоматические ссылки GitHub `Source code (zip)` / `Source code (tar.gz)` на странице релиза включают эту папку на момент релизного тега. Отдельный архив исходников приложения больше не нужен.
 Скомпилированные объекты, кэши инструментов, приватные тестовые корпуса и готовые релизные бинарники в историю Git не входят.
 
 Базовая headless-сборка:
 
 ```sh
+cd Source
 cmake --preset source-release
 cmake --build --preset source-release
 ```
 
-Полная сборка интерфейса и всех обработчиков требует Qt и закреплённых зависимостей. Точная сборочная цепочка описана в `BUILDING.md` внутри архива; версии и контрольные суммы зависимостей - в
-`THIRD_PARTY_NOTES.md` и `docs/dependencies`.
+Полная сборка интерфейса и всех обработчиков требует Qt и закреплённых зависимостей. Точная сборочная цепочка описана в [Source/BUILDING.md](Source/BUILDING.md); версии и контрольные суммы зависимостей - в
+`Source/THIRD_PARTY_NOTES.md` и `Source/docs/dependencies`.
 Точные исходники внешних зависимостей доступны отдельным вложением
 `VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
-Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.18.
+Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.19.
 
 ## Состояние Проекта
 

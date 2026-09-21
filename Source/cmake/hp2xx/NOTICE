@@ -1,0 +1,24 @@
+GNU hp2xx 3.4.4
+Source: https://ftp.gnu.org/gnu/hp2xx/hp2xx-3.4.4.tar.gz
+SHA-256: 47b72fb386a189b52f07e31e424c038954c4e0ce405803841bed742bab488817
+License: GNU GPL version 2 or later. Upstream source notices remain intact.
+The complete upstream COPYING is copied to the build directory as hp2xx-COPYING.
+
+The viewer compiles hpgl.c, chardraw.c, clip.c, fillpoly.c, pendef.c and lindef.c.
+The adapter redirects stdio to bounded memory streams and contains exit recovery
+inside C. patch.cmake applies checked edits only to the extracted build copy:
+numeric/label/polygon bounds, typed failures, per-call state and explicit reset
+style records. No raster backend, command-line program or external font library
+is included. The SVG serializer consumes the native intermediate records.
+
+Initial supported scope: first-page HPGL vectors, curves, built-in ASCII labels,
+standard line patterns and upstream polygon fills; normal HPGL ESC envelopes.
+User-defined UL patterns use upstream expansion, bounded to 19 elements and
+indices 1..8, with nonnegative lengths and a positive total. UL resets work.
+Encoded PE polylines, AD/SD font selection, unavailable
+glyph/centering tables, non-ASCII labels, parameterized BP plot metadata, custom
+CR color ranges, FP nonzero-winding fills and PT fill-pen thickness currently
+return unsupported. Bare BP, default CR, NP256, MC0 and TR0 are accepted.
+This is not a general PCL renderer.
+Unrecognized commands return unsupported rather than a partial success.
+Known upstream geometry fidelity limitations still require corpus comparison.

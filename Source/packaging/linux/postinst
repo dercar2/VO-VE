@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+install_root=/usr/lib/vo-ve
+update_marker=/run/lock/vo-ve-package-update
+
+for installed in "$install_root"/vove-*; do
+    [ -e "$installed" ] || continue
+    chmod 0755 "$installed"
+done
+rm -f "$update_marker"
+
+exit 0
