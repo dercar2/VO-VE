@@ -18,6 +18,8 @@ NAS devices. It helps you quickly find the artwork you need, recognise it by its
 
 **[Download VO-VE](https://github.com/dercar2/VO-VE/releases/latest)**
 
+![VO-VE in action](Site/assets/images/vove-demo.gif)
+
 ## Why VO-VE Exists
 
 An ordinary file manager shows names and standard low-resolution icons. A graphics editor can open a document, but it is too heavy for quickly browsing hundreds of pieces of artwork. Cataloguing tools require imports, a database, tags and a separately organised archive. The closest in spirit are XnView, FastStone, IrfanView or the more elite ACDSee, Adobe Bridge and others. But for a simple viewer, they all have too much functionality and support a limited range of graphics formats (cdr being the biggest problem).
