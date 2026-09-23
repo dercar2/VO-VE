@@ -8854,8 +8854,10 @@ void MainWindow::handle_folder_mosaic(FolderMosaicReply reply) {
         if (!globalSearchActive_ && !recursiveViewActive_ && entry != nullptr && preview_failure_can_disconnect(*entry)) {
             enter_preview_offline_state();
         }
-    } else if (status == preview::helper_protocol::ResponseStatus::permission_denied ||
-               status == preview::helper_protocol::ResponseStatus::authentication_failed) {
+    } else if (status == preview::helper_protocol::ResponseStatus::authentication_failed) {
+        // A denied child folder does not revoke access to its parent or siblings.
+        // Its own pixels were invalidated by set_preview above; only authentication
+        // failure retains the catalog-wide protection policy.
         if (!globalSearchActive_ && !recursiveViewActive_) {
             enter_preview_blocked_state();
         }

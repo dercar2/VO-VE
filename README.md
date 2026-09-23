@@ -12,7 +12,7 @@ NAS devices. It helps you quickly find the artwork you need, recognise it by its
 - Website: [vo-ve.ru](https://vo-ve.ru) (not ready yet)
 - Repository: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Report a problem: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Version: **0.2.19**
+- Version: **0.2.20**
 - Build: **release Alfa**
 - Currently available for: **Windows x64 and Linux amd64**
 
@@ -150,14 +150,14 @@ No native graphics editor is required or launched to generate previews.
 Ready-to-use builds are in the separate
 [Releases](https://github.com/dercar2/VO-VE/releases) section, not mixed in with the source files.
 
-Current version: **[VO-VE 0.2.19](https://github.com/dercar2/VO-VE/releases/tag/v0.2.19)**.
+Current version: **[VO-VE 0.2.20](https://github.com/dercar2/VO-VE/releases/tag/v0.2.20)**.
 
-- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/VO-VE-0.2.19-windows-x64-setup.exe)
-- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/vo-ve_0.2.19_amd64.deb)
-- [Source code 0.2.19](https://github.com/dercar2/VO-VE/tree/v0.2.19/Source)
+- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/VO-VE-0.2.20-windows-x64-setup.exe)
+- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/vo-ve_0.2.20_amd64.deb)
+- [Source code 0.2.20](https://github.com/dercar2/VO-VE/tree/v0.2.20/Source)
 - [Licences and notices](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
 - [Dependency sources](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (for building, not needed for a normal installation)
-- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v0.2.19/SHA256SUMS.txt)
+- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/SHA256SUMS.txt)
 
 Windows uses a single `.exe` installer. The current Linux distribution is an amd64 `.deb` package. Additional components are not disguised as part of VO-VE and are installed only
 when explicitly selected by the user.
@@ -180,7 +180,7 @@ Building the full interface and all handlers requires Qt and the pinned dependen
 `Source/THIRD_PARTY_NOTES.md` and `Source/docs/dependencies`.
 The exact sources of external dependencies are available as a separate attachment,
 `VO-VE-0.2.13-dependency-sources.zip`, on the release page.
-The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 0.2.19 sources.
+The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 0.2.20 sources.
 
 ## Project Status
 

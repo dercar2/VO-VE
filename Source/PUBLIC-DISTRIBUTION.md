@@ -1,13 +1,13 @@
-# VO-VE 0.2.19 Distribution
+# VO-VE 0.2.20 Distribution
 
-Application source commit: cdbf09665d6cd67edd0b4b269fbb8fde4a497f62.
-Build label: CWS-DND-20260922.
+Application source commit: c318544645c89c8fcc7203277c7c6ac01013e3c7.
+Build label: PREVIEW-ISOLATION-20260923.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 For the Source/ migration, the public snapshot belongs in Source/ in the release tag's
 automatic ZIP and TAR.GZ archives.
 Until those archives pass content verification and full Windows/Linux builds without WORK,
-the release also retains the custom VO-VE-0.2.19-sources.zip and local source delivery.
+the release also retains the custom VO-VE-0.2.20-sources.zip and local source delivery.
 Unchanged dependency supplements are reused from a pinned public
 release; they are not duplicate uploads or entries in this release's SHA256SUMS.txt:
 

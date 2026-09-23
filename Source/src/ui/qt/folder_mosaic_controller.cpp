@@ -433,6 +433,17 @@ void FolderMosaicController::finish_terminal(
     if (!active_) {
         return;
     }
+    if (status == preview::helper_protocol::ResponseStatus::permission_denied ||
+        status == preview::helper_protocol::ResponseStatus::authentication_failed) {
+        // Keep viewport dispatch from repeatedly probing a denied source. Refresh
+        // or a changed source identity permits a new attempt.
+        const auto &request = active_->request;
+        pendingRetries_.insert(request.folder_id, {.source_size = request.source_size,
+                                                   .modified_unix_ns = request.modified_unix_ns,
+                                                   .source_revision = request.source_revision,
+                                                   .attempt = request.retry_attempt,
+                                                   .exhausted = true});
+    }
     FolderMosaicReply reply{.folder_id = active_->request.folder_id,
                             .app_generation = appGeneration_,
                             .source_size = active_->request.source_size,
