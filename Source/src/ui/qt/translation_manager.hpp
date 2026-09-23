@@ -11,7 +11,7 @@ class QTranslator;
 namespace vove::ui {
 
 inline constexpr auto translationSourceDigest =
-    "5e3544edefe2e6d6fc097c79496ece892acea7fdbd36a9a2a49eed0747c07d17";
+    "ef12c40b9fed7d0dba009af3a0809b7ef411ef4e2e7000c558f85708c85208cf";
 
 class TranslationManager final {
   public:

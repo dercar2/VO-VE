@@ -780,6 +780,26 @@ bool ambiguous_rename_status(const fileops::OperationStatus status) {
            status == Status::unknown_outcome || status == Status::io_error;
 }
 
+QString trash_operation_error_text(const fileops::OperationStatus status) {
+    using Status = fileops::OperationStatus;
+    switch (status) {
+    case Status::success:
+        return {};
+    case Status::invalid_request:
+        return QCoreApplication::translate("MainWindow", "Invalid Trash operation request");
+    case Status::permission_denied:
+        return QCoreApplication::translate("MainWindow", "No permission for this Trash operation");
+    case Status::timed_out:
+        return QCoreApplication::translate("MainWindow", "The operation timed out");
+    case Status::unsupported:
+        return QCoreApplication::translate("MainWindow", "This Trash operation is not supported");
+    case Status::io_error:
+        return QCoreApplication::translate("MainWindow", "Trash operation I/O error");
+    default:
+        return operation_status_text(status);
+    }
+}
+
 bool confirms_no_committed_rename(const fileops::OperationResult &result) {
     return ambiguous_rename_status(result.status) && result.source_matches_expected &&
            !result.destination_present;
@@ -1185,7 +1205,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
             const auto immediate_tree_pin = authenticated_tree_drag && pin_target;
             const auto drop_probe_available = !pendingExternalDirectoryDrop_ &&
                                               !pendingExternalTransferDrop_ &&
-                                              !pendingRenamePreparation_ &&
+                                              !pendingDirectoryPreparation_ &&
                                               dropProbeSource_.idle();
             const auto admissible =
                 paths != nullptr && (immediate_tree_pin || drop_probe_available) &&
@@ -2645,7 +2665,7 @@ void MainWindow::open_external_paths(const QStringList &paths) {
     }
 
     if (pendingExternalDirectoryDrop_ || pendingExternalTransferDrop_ ||
-        pendingRenamePreparation_ || !dropProbeSource_.idle()) {
+        pendingDirectoryPreparation_ || !dropProbeSource_.idle()) {
         queuedExternalOpenPaths_ = std::move(normalized_paths);
         if (pendingExternalDirectoryDrop_ &&
             pendingExternalDirectoryDrop_->intent == ExternalDirectoryDropIntent::open) {
@@ -3276,7 +3296,7 @@ void MainWindow::update_clipboard_actions() {
     pasteObjectsAction_->setEnabled(createFolderAction_ && createFolderAction_->isEnabled() &&
         lastUpdate_.state == catalog::CatalogSessionState::ready &&
         !pendingExternalDirectoryDrop_ && !pendingExternalTransferDrop_ &&
-        !pendingRenamePreparation_ && dropProbeSource_.idle() &&
+        !pendingDirectoryPreparation_ && dropProbeSource_.idle() &&
         !trashConfirmationInProgress_ && mime && mime->hasUrls());
 }
 
@@ -3871,7 +3891,7 @@ bool MainWindow::begin_external_directory_drop(const ExternalDirectoryDropIntent
                                                const fileops::FileTransferKind transfer_kind,
                                                QString transfer_destination) {
     if (paths.isEmpty() || pendingExternalDirectoryDrop_ || pendingExternalTransferDrop_ ||
-        pendingRenamePreparation_ || !dropProbeSource_.idle() ||
+        pendingDirectoryPreparation_ || !dropProbeSource_.idle() ||
         (intent == ExternalDirectoryDropIntent::open && paths.size() != 1) ||
         (intent == ExternalDirectoryDropIntent::transfer && transfer_destination.isEmpty())) {
         return false;
@@ -3912,7 +3932,7 @@ bool MainWindow::begin_external_transfer_drop(QStringList paths,
         (!search_entries.isEmpty() && search_entries.size() != paths.size()) ||
         (!trash_target && destination_directory.trimmed().isEmpty()) ||
         pendingExternalDirectoryDrop_ || pendingExternalTransferDrop_ ||
-        pendingRenamePreparation_ || !dropProbeSource_.idle()) {
+        pendingDirectoryPreparation_ || !dropProbeSource_.idle()) {
         return false;
     }
 
@@ -3953,8 +3973,8 @@ bool MainWindow::begin_external_transfer_drop(QStringList paths,
 }
 
 void MainWindow::poll_external_drop() {
-    if (pendingRenamePreparation_) {
-        poll_rename_preparation();
+    if (pendingDirectoryPreparation_) {
+        poll_directory_preparation();
     } else if (pendingExternalTransferDrop_) {
         poll_external_transfer_drop();
     } else if (pendingExternalDirectoryDrop_) {
@@ -4233,7 +4253,7 @@ void MainWindow::poll_external_transfer_drop() {
 
 bool MainWindow::resume_queued_external_open() {
     if (queuedExternalOpenPaths_.isEmpty() || pendingExternalDirectoryDrop_ ||
-        pendingExternalTransferDrop_ || pendingRenamePreparation_ || !dropProbeSource_.idle()) {
+        pendingExternalTransferDrop_ || pendingDirectoryPreparation_ || !dropProbeSource_.idle()) {
         return false;
     }
     auto paths = std::move(queuedExternalOpenPaths_);
@@ -4575,10 +4595,10 @@ void MainWindow::prompt_create_directory() {
     transferProbeTimer_->start();
 }
 
-void MainWindow::prepare_rename_entries(
+void MainWindow::prepare_directory_entries(
     QList<core::DirectoryEntry> entries, QList<qsizetype> indices,
-    std::function<void(QList<core::DirectoryEntry>)> ready) {
-    if (pendingRenamePreparation_ || pendingExternalDirectoryDrop_ ||
+    std::function<void(QList<core::DirectoryEntry>)> ready, const bool trash_target) {
+    if (pendingDirectoryPreparation_ || pendingExternalDirectoryDrop_ ||
         pendingExternalTransferDrop_ || !dropProbeSource_.idle()) {
         operationStatus_ = QCoreApplication::translate("MainWindow", "Another file operation is still running");
         update_status(lastUpdate_);
@@ -4588,40 +4608,43 @@ void MainWindow::prepare_rename_entries(
         ready(std::move(entries));
         return;
     }
-    PendingRenamePreparation pending;
+    PendingDirectoryPreparation pending;
     pending.entries = std::move(entries);
     pending.indices = std::move(indices);
     pending.ready = std::move(ready);
+    pending.trash_target = trash_target;
     pending.readers_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     pending.generation = nextDropProbeGeneration_++;
     const auto path = native_path(QString::fromUtf8(pending.entries.at(pending.indices.front()).path_utf8));
     const auto generation = pending.generation;
-    pendingRenamePreparation_ = std::move(pending);
+    pendingDirectoryPreparation_ = std::move(pending);
     renamePreviewSuspended_ = true;
     begin_preview_generation(false);
     previewTimer_->stop();
     set_rename_in_flight(true);
-    operationStatus_ = QCoreApplication::translate("MainWindow", "Batch rename: preparing…");
+    operationStatus_ = trash_target
+        ? QCoreApplication::translate("MainWindow", "VO-VE Trash: preparing…")
+        : QCoreApplication::translate("MainWindow", "Batch rename: preparing…");
     update_status(lastUpdate_);
     dropProbeSource_.submit({.generation = generation, .path = path.parent_path(),
                              .maximum_entries = 1, .exact_entry_path = path});
     dropProbeTimer_->start();
 }
 
-void MainWindow::poll_rename_preparation() {
-    if (!pendingRenamePreparation_) return;
+void MainWindow::poll_directory_preparation() {
+    if (!pendingDirectoryPreparation_) return;
     if ((!folderMosaicController_.readers_idle() || !previewClient_.readers_idle()) &&
-        std::chrono::steady_clock::now() >= pendingRenamePreparation_->readers_deadline) {
-        fail_rename_preparation();
+        std::chrono::steady_clock::now() >= pendingDirectoryPreparation_->readers_deadline) {
+        fail_directory_preparation();
         return;
     }
     for (int batch_index{}; batch_index < 32; ++batch_index) {
         auto batch = dropProbeSource_.poll();
         if (!batch) break;
-        auto &pending = *pendingRenamePreparation_;
+        auto &pending = *pendingDirectoryPreparation_;
         if (batch->generation != pending.generation) continue;
         if (batch->error) {
-            fail_rename_preparation();
+            fail_directory_preparation();
             return;
         }
         auto &expected = pending.entries[pending.indices.at(pending.index)];
@@ -4631,7 +4654,7 @@ void MainWindow::poll_rename_preparation() {
             if (pending.received || entry.kind != core::EntryKind::directory ||
                 entry.path_utf8 != expected.path_utf8 ||
                 !fileops::same_object_identity(entry.source_revision_utf8, expected.source_revision_utf8)) {
-                fail_rename_preparation();
+                fail_directory_preparation();
                 return;
             }
             expected = entry;
@@ -4639,17 +4662,17 @@ void MainWindow::poll_rename_preparation() {
         }
         if (batch->is_final) {
             if (!pending.received) {
-                fail_rename_preparation();
+                fail_directory_preparation();
                 return;
             }
             pending.awaiting_worker_reap = true;
             break;
         }
     }
-    if (!pendingRenamePreparation_ || !pendingRenamePreparation_->awaiting_worker_reap ||
+    if (!pendingDirectoryPreparation_ || !pendingDirectoryPreparation_->awaiting_worker_reap ||
         !dropProbeSource_.idle()) return;
     if (!folderMosaicController_.readers_idle() || !previewClient_.readers_idle()) return;
-    auto &pending = *pendingRenamePreparation_;
+    auto &pending = *pendingDirectoryPreparation_;
     ++pending.index;
     if (pending.index < pending.indices.size()) {
         pending.generation = nextDropProbeGeneration_++;
@@ -4661,17 +4684,20 @@ void MainWindow::poll_rename_preparation() {
         return;
     }
     auto completed = std::move(pending);
-    pendingRenamePreparation_.reset();
+    pendingDirectoryPreparation_.reset();
     dropProbeTimer_->stop();
     completed.ready(std::move(completed.entries));
     resume_queued_external_open();
 }
 
-void MainWindow::fail_rename_preparation() {
-    if (pendingRenamePreparation_) dropProbeSource_.cancel(pendingRenamePreparation_->generation);
-    pendingRenamePreparation_.reset();
+void MainWindow::fail_directory_preparation() {
+    const auto trash_target = pendingDirectoryPreparation_ && pendingDirectoryPreparation_->trash_target;
+    if (pendingDirectoryPreparation_) dropProbeSource_.cancel(pendingDirectoryPreparation_->generation);
+    pendingDirectoryPreparation_.reset();
     set_rename_in_flight(false);
-    operationStatus_ = QCoreApplication::translate("MainWindow", "The file list changed. Retry renaming");
+    operationStatus_ = trash_target
+        ? QCoreApplication::translate("MainWindow", "The file list changed. Retry deletion")
+        : QCoreApplication::translate("MainWindow", "The file list changed. Retry renaming");
     update_status(lastUpdate_);
     if (dropProbeSource_.idle()) dropProbeTimer_->stop();
     else dropProbeTimer_->start();
@@ -4734,7 +4760,7 @@ void MainWindow::prompt_rename_selected() {
         update_status(lastUpdate_);
         return;
     }
-    prepare_rename_entries(entries, directory ? QList<qsizetype>{0} : QList<qsizetype>{},
+    prepare_directory_entries(entries, directory ? QList<qsizetype>{0} : QList<qsizetype>{},
                            [this, destination_name](QList<core::DirectoryEntry> prepared) {
                                submit_single_rename(prepared.front(), destination_name);
                            });
@@ -4855,7 +4881,7 @@ void MainWindow::prompt_batch_rename_selected(const QList<core::DirectoryEntry> 
             directory_indices.push_back(index);
         }
     }
-    prepare_rename_entries(entries, std::move(directory_indices),
+    prepare_directory_entries(entries, std::move(directory_indices),
                            [this, plan = dialog.plan()](QList<core::DirectoryEntry> prepared) {
                                submit_batch_rename(plan, prepared);
                            });
@@ -4949,11 +4975,27 @@ bool MainWindow::prompt_move_entries_to_trash(const QList<core::DirectoryEntry> 
         renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
         fileTransferCoordinator_.busy() || fileOperationService_.busy() ||
         pendingRenameOperation_ || batchRenameCoordinator_.busy() ||
-        permanentDeleteCoordinator_.busy() || trashCoordinator_.busy()) {
+        permanentDeleteCoordinator_.busy() || trashCoordinator_.busy() ||
+        directoryTransferService_.busy() || pendingExternalDirectoryDrop_ ||
+        pendingExternalTransferDrop_ || pendingDirectoryPreparation_ || !dropProbeSource_.idle()) {
         update_status(lastUpdate_);
         return false;
     }
 
+    QList<qsizetype> directory_indices;
+    for (qsizetype index{}; index < entries.size(); ++index) {
+        if (entries.at(index).kind == core::EntryKind::directory) {
+            directory_indices.push_back(index);
+        }
+    }
+    if (!directory_indices.isEmpty()) {
+        prepare_directory_entries(entries, std::move(directory_indices),
+            [this](QList<core::DirectoryEntry> prepared) {
+                set_rename_in_flight(false);
+                static_cast<void>(confirm_and_start_trash_move(prepared));
+            }, true);
+        return true;
+    }
     return confirm_and_start_trash_move(entries);
 }
 
@@ -5003,10 +5045,22 @@ bool MainWindow::confirm_and_start_trash_move(const QList<core::DirectoryEntry> 
         pendingRenameOperation_ || batchRenameCoordinator_.busy() ||
         permanentDeleteCoordinator_.busy() || trashCoordinator_.busy() ||
         directoryTransferService_.busy() || pendingExternalDirectoryDrop_ ||
-        pendingExternalTransferDrop_ || !dropProbeSource_.idle()) {
+        pendingExternalTransferDrop_ || pendingDirectoryPreparation_ || !dropProbeSource_.idle()) {
         return false;
     }
 
+    return submit_trash_move(entries);
+}
+
+bool MainWindow::submit_trash_move(const QList<core::DirectoryEntry> &entries) {
+    if (refresh_current_operation_journal_state() != CurrentOperationJournalState::none ||
+        renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
+        fileTransferCoordinator_.busy() || fileOperationService_.busy() ||
+        pendingRenameOperation_ || batchRenameCoordinator_.busy() ||
+        permanentDeleteCoordinator_.busy() || trashCoordinator_.busy()) {
+        update_status(lastUpdate_);
+        return false;
+    }
     operationStatus_ = QCoreApplication::translate("MainWindow", "VO-VE Trash: preparing…");
     set_delete_in_flight(true);
     update_status(lastUpdate_);
@@ -5640,6 +5694,14 @@ void MainWindow::handle_trash_result(const fileops::TrashResult &result,
             : restoring
                 ? QCoreApplication::translate("MainWindow", "Restore failed")
                 : QCoreApplication::translate("MainWindow", "Files were not moved to Trash");
+        const auto reason = trash_operation_error_text(result.operation_status);
+        if (!reason.isEmpty()) {
+            operationStatus_ += QStringLiteral(": ") + reason;
+        }
+        const auto detail = QString::fromStdString(result.detail_utf8).left(512).simplified();
+        if (!detail.isEmpty()) {
+            operationStatus_ += QStringLiteral(": ") + detail;
+        }
     }
     if (!result.ok() && trashPurgeTotal_ != 0) {
         trashPurgeQueue_.clear();

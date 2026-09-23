@@ -18,6 +18,7 @@
 #include <windows.h>
 
 #include "windows/remote_protocol.hpp"
+#include "windows/trash_security.hpp"
 #elif defined(__linux__)
 #include <fcntl.h>
 #include <sys/vfs.h>
@@ -583,6 +584,22 @@ bool transfer_delete_mode(const DeleteMode mode) noexcept {
 }
 
 bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8) {
+    if (preserves_trash_permissions(request.mode)) {
+#ifdef _WIN32
+        if (request.object_kind != OperationObjectKind::regular_file ||
+            !detail::validate_preserved_trash_security(request.trash_security_baseline_sddl_utf8,
+                                                      detail_utf8)) {
+            if (detail_utf8.empty()) detail_utf8 = "preserved Trash supports ordinary files only";
+            return false;
+        }
+#else
+        detail_utf8 = "preserved Trash permissions require Windows";
+        return false;
+#endif
+    } else if (!request.trash_security_baseline_sddl_utf8.empty()) {
+        detail_utf8 = "security baseline is incompatible with rename mode";
+        return false;
+    }
     const auto has_anchor_path = !request.destination_anchor_path.empty();
     const auto has_anchor_identity = !request.destination_anchor_identity_utf8.empty();
     const auto replacement = request.mode == RenameMode::transfer_publish_replace ||
@@ -601,7 +618,7 @@ bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8
                              request.mode == RenameMode::single_allow_extension_change;
     const bool directory_object = request.object_kind == OperationObjectKind::directory;
     if (!single_mode && request.mode != RenameMode::batch_internal &&
-        request.mode != RenameMode::trash_internal && request.mode != RenameMode::trash_restore &&
+        !is_trash_store_mode(request.mode) && !is_trash_restore_mode(request.mode) &&
         !transfer_rename_mode(request.mode)) {
         detail_utf8 = "rename mode is invalid";
         return false;
@@ -611,8 +628,8 @@ bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8
         return false;
     }
     if (directory_object && !single_mode && request.mode != RenameMode::batch_internal &&
-        request.mode != RenameMode::trash_internal &&
-        request.mode != RenameMode::trash_restore) {
+        !is_trash_store_mode(request.mode) &&
+        !is_trash_restore_mode(request.mode)) {
         detail_utf8 = "directory rename requires same-parent rename or VO-VE Trash";
         return false;
     }
@@ -644,10 +661,10 @@ bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8
         return false;
     }
     const bool ordinary_mode = single_mode || request.mode == RenameMode::batch_internal;
-    const bool trash_store_shape = request.mode == RenameMode::trash_internal &&
+    const bool trash_store_shape = is_trash_store_mode(request.mode) &&
                                    !is_trash_item(request.source) &&
                                    is_trash_item(request.destination);
-    const bool trash_restore_shape = request.mode == RenameMode::trash_restore &&
+    const bool trash_restore_shape = is_trash_restore_mode(request.mode) &&
                                      is_trash_item(request.source) &&
                                      !is_trash_item(request.destination);
     const bool same_parent =
@@ -691,7 +708,7 @@ bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8
         detail_utf8 = "rename cannot change the file extension";
         return false;
     }
-    if ((request.mode == RenameMode::trash_internal || request.mode == RenameMode::trash_restore) &&
+    if ((is_trash_store_mode(request.mode) || is_trash_restore_mode(request.mode)) &&
 #ifdef _WIN32
         (!request.expected_source.source_revision_utf8.starts_with("win-file128:") ||
          !detail::valid_strong_delete_revision(request.expected_source.source_revision_utf8))
@@ -708,7 +725,7 @@ bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8
         return false;
     }
     const auto trash_mode =
-        request.mode == RenameMode::trash_internal || request.mode == RenameMode::trash_restore;
+        is_trash_store_mode(request.mode) || is_trash_restore_mode(request.mode);
     if (trash_mode && !request.source_parent_identity_utf8.empty() &&
         (!valid_utf8(request.source_parent_identity_utf8) ||
          request.source_parent_identity_utf8.find('\0') != std::string::npos ||
@@ -737,13 +754,29 @@ bool valid_rename_request(const RenameRequest &request, std::string &detail_utf8
 }
 
 bool valid_delete_request(const DeleteRequest &request, std::string &detail_utf8) {
-    if (request.mode != DeleteMode::permanent_remote && request.mode != DeleteMode::trash_purge &&
+    if (preserves_trash_permissions(request.mode)) {
+#ifdef _WIN32
+        if (request.object_kind != OperationObjectKind::regular_file || !is_trash_item(request.source) ||
+            !detail::validate_preserved_trash_security(request.trash_security_baseline_sddl_utf8,
+                                                      detail_utf8)) {
+            if (detail_utf8.empty()) detail_utf8 = "preserved Trash supports ordinary files only";
+            return false;
+        }
+#else
+        detail_utf8 = "preserved Trash permissions require Windows";
+        return false;
+#endif
+    } else if (!request.trash_security_baseline_sddl_utf8.empty()) {
+        detail_utf8 = "security baseline is incompatible with delete mode";
+        return false;
+    }
+    if (request.mode != DeleteMode::permanent_remote && !is_trash_purge_mode(request.mode) &&
         !transfer_delete_mode(request.mode)) {
         detail_utf8 = "delete mode is invalid";
         return false;
     }
     if (request.object_kind == OperationObjectKind::directory &&
-        request.mode != DeleteMode::trash_purge) {
+        !is_trash_purge_mode(request.mode)) {
         detail_utf8 = "directory deletion is restricted to VO-VE Trash purge";
         return false;
     }
@@ -802,7 +835,7 @@ bool valid_delete_request(const DeleteRequest &request, std::string &detail_utf8
         detail_utf8 = "delete request requires a strong local or typed SMB source identity";
         return false;
     }
-    if (request.mode == DeleteMode::trash_purge &&
+    if (is_trash_purge_mode(request.mode) &&
         (!is_owned_trash_payload_path(request.source) ||
          !request.expected_source.source_revision_utf8.starts_with("win-file128:"))) {
         detail_utf8 = "trash purge requires an owned item and a strong local NTFS identity";
@@ -813,7 +846,7 @@ bool valid_delete_request(const DeleteRequest &request, std::string &detail_utf8
         detail_utf8 = "delete request has no stable source identity";
         return false;
     }
-    if (request.mode == DeleteMode::trash_purge &&
+    if (is_trash_purge_mode(request.mode) &&
         (!is_owned_trash_payload_path(request.source) ||
          (!request.expected_source.source_revision_utf8.starts_with("posix:") &&
           !request.expected_source.source_revision_utf8.starts_with("posix2:")))) {
@@ -821,7 +854,7 @@ bool valid_delete_request(const DeleteRequest &request, std::string &detail_utf8
         return false;
     }
 #endif
-    if (request.mode == DeleteMode::trash_purge && !request.source_parent_identity_utf8.empty() &&
+    if (is_trash_purge_mode(request.mode) && !request.source_parent_identity_utf8.empty() &&
         (!valid_utf8(request.source_parent_identity_utf8) ||
          request.source_parent_identity_utf8.find('\0') != std::string::npos ||
          !request.source_parent_identity_utf8.starts_with("linux-smb:"))) {

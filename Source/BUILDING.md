@@ -1,7 +1,7 @@
 # Building VO-VE
 
-Generated from clean tracked WORK at commit c318544645c89c8fcc7203277c7c6ac01013e3c7.
-Build label: PREVIEW-ISOLATION-20260923
+Generated from clean tracked WORK at commit a94118241bca5f7aea34975ca5fc392ae9ec1671.
+Build label: PREVIEW-TRASH-20260923
 In the public tag archive, this snapshot is the Source/ directory beside Site/.
 See PUBLIC-DISTRIBUTION.md (added during release assembly) for pinned supplement URLs
 and SHA-256 digests. LICENSE, THIRD_PARTY_NOTES.md and dependency notices accompany the source.

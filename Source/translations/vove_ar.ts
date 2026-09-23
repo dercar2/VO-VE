@@ -456,6 +456,26 @@ preview</source>
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Invalid Trash operation request</source>
+        <translation>طلب عملية سلة المحذوفات غير صالح</translation>
+    </message>
+    <message>
+        <source>No permission for this Trash operation</source>
+        <translation>لا توجد صلاحية لإجراء هذه العملية على سلة المحذوفات</translation>
+    </message>
+    <message>
+        <source>The operation timed out</source>
+        <translation>انتهت مهلة العملية</translation>
+    </message>
+    <message>
+        <source>This Trash operation is not supported</source>
+        <translation>عملية سلة المحذوفات هذه غير مدعومة</translation>
+    </message>
+    <message>
+        <source>Trash operation I/O error</source>
+        <translation>خطأ إدخال/إخراج أثناء عملية سلة المحذوفات</translation>
+    </message>
+    <message>
         <source>VO-VE Trash is unavailable on this resource. Originals were not changed</source>
         <translation>سلة VO-VE غير متاحة في هذا الموقع. لم يتم تغيير العناصر الأصلية</translation>
     </message>
@@ -2903,7 +2923,7 @@ Stage: %2</source>
         <location filename="../src/ui/qt/translation_manager.cpp" line="12"/>
         <location filename="../src/ui/qt/translation_manager.cpp" line="19"/>
         <source>VOVE_TRANSLATION_PACK_COMPLETE</source>
-        <translation>ar|5e3544edefe2e6d6fc097c79496ece892acea7fdbd36a9a2a49eed0747c07d17</translation>
+        <translation>ar|ef12c40b9fed7d0dba009af3a0809b7ef411ef4e2e7000c558f85708c85208cf</translation>
     </message>
 </context>
 <context>

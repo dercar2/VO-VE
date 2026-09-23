@@ -12,7 +12,7 @@
 
 namespace vove::fileops {
 
-inline constexpr std::uint32_t kTrashTransactionVersion = 9;
+inline constexpr std::uint32_t kTrashTransactionVersion = 10;
 inline constexpr std::size_t kMaximumTrashItems = 10'000;
 inline constexpr std::size_t kMaximumTrashDirectoryEntries = 10'000;
 
@@ -69,6 +69,7 @@ struct TrashSource {
     std::string storage_identity_utf8;
     std::string original_security_descriptor_sddl_utf8;
     std::filesystem::path restore_path;
+    TrashPayloadPolicy payload_policy{TrashPayloadPolicy::strict};
 };
 
 struct TrashItem {
@@ -87,6 +88,7 @@ struct TrashItem {
     TrashItemLocation location{TrashItemLocation::source};
     TrashSecurityState security_state{TrashSecurityState::original};
     std::string original_security_descriptor_sddl_utf8;
+    TrashPayloadPolicy payload_policy{TrashPayloadPolicy::strict};
 };
 
 struct TrashTransaction {

@@ -445,7 +445,8 @@ void TrashDirectoryLease::reset() noexcept {
 }
 
 TrashSecurityResult capture_trash_security(const std::filesystem::path &path,
-                                           const SourceSnapshot &expected, const bool directory) {
+                                           const SourceSnapshot &expected, const bool directory,
+                                           const bool allow_foreign_file_owner) {
     std::string detail;
     auto handle = open_verified_file(path, expected, READ_CONTROL, detail, directory, directory);
     if (!handle) {
@@ -455,7 +456,8 @@ TrashSecurityResult capture_trash_security(const std::filesystem::path &path,
     PACL dacl{};
     PSECURITY_DESCRIPTOR raw_descriptor{};
     const auto error = GetSecurityInfo(handle->get(), SE_FILE_OBJECT,
-                                       OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                                       OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
+                                           DACL_SECURITY_INFORMATION,
                                        &owner, nullptr, &dacl, nullptr, &raw_descriptor);
     if (error != ERROR_SUCCESS) {
         return security_failure(status_from_error(error),
@@ -463,7 +465,8 @@ TrashSecurityResult capture_trash_security(const std::filesystem::path &path,
     }
     ScopedLocal descriptor(raw_descriptor);
     const auto user = current_user_sid(detail);
-    if (!user || owner == nullptr || EqualSid(owner, user->sid) == FALSE) {
+    const auto foreign_owner = user && owner != nullptr && EqualSid(owner, user->sid) == FALSE;
+    if (!user || owner == nullptr || (foreign_owner && (!allow_foreign_file_owner || directory))) {
         return security_failure(OperationStatus::permission_denied,
                                 user ? "VO-VE Trash accepts only files owned by the current user"
                                      : std::move(detail));
@@ -479,8 +482,11 @@ TrashSecurityResult capture_trash_security(const std::filesystem::path &path,
                                 "VO-VE Trash does not accept a source with a NULL DACL");
     }
     LPWSTR raw_sddl{};
+    const SECURITY_INFORMATION information = foreign_owner
+        ? OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION
+        : DACL_SECURITY_INFORMATION;
     if (ConvertSecurityDescriptorToStringSecurityDescriptorW(raw_descriptor, SDDL_REVISION_1,
-                                                             DACL_SECURITY_INFORMATION, &raw_sddl,
+                                                             information, &raw_sddl,
                                                              nullptr) == FALSE) {
         const auto conversion_error = GetLastError();
         return security_failure(
@@ -493,8 +499,112 @@ TrashSecurityResult capture_trash_security(const std::filesystem::path &path,
         return security_failure(OperationStatus::io_error,
                                 "source DACL could not be encoded as UTF-8");
     }
+    if (foreign_owner && !validate_preserved_trash_security(*encoded, detail)) {
+        return security_failure(OperationStatus::unsupported, std::move(detail));
+    }
+    if (foreign_owner) {
+        FILE_STANDARD_INFO standard{};
+        if (!GetFileInformationByHandleEx(handle->get(), FileStandardInfo, &standard, sizeof(standard)) ||
+            standard.NumberOfLinks != 1 || standard.DeletePending) {
+            return security_failure(OperationStatus::unsupported,
+                                    "preserved Trash accepts only ordinary single-link files");
+        }
+    }
     auto snapshot = snapshot_from_handle(handle->get(), detail, directory);
-    return snapshot ? security_success(std::move(*snapshot), *encoded)
+    if (!snapshot) return security_failure(OperationStatus::unknown_outcome, std::move(detail));
+    auto result = security_success(std::move(*snapshot), *encoded);
+    result.payload_policy = foreign_owner ? TrashPayloadPolicy::preserve_permissions
+                                         : TrashPayloadPolicy::strict;
+    return result;
+}
+
+bool validate_preserved_trash_security(const std::string &sddl_utf8, std::string &detail) {
+    if (sddl_utf8.empty() || sddl_utf8.size() > kMaximumTrashSecurityBaselineBytes ||
+        sddl_utf8.find('\0') != std::string::npos) {
+        detail = "preserved Trash security baseline is empty or exceeds its limit";
+        return false;
+    }
+    const auto text = wide_from_utf8(sddl_utf8);
+    PSECURITY_DESCRIPTOR raw{};
+    if (!text || !ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                     text->c_str(), SDDL_REVISION_1, &raw, nullptr)) {
+        detail = "preserved Trash security baseline is invalid";
+        return false;
+    }
+    ScopedLocal descriptor(raw);
+    PSID owner{}, group{};
+    PACL dacl{};
+    BOOL defaulted{}, present{};
+    if (!GetSecurityDescriptorOwner(raw, &owner, &defaulted) || !owner || !IsValidSid(owner) ||
+        !GetSecurityDescriptorGroup(raw, &group, &defaulted) || !group || !IsValidSid(group) ||
+        !GetSecurityDescriptorDacl(raw, &present, &dacl, &defaulted) || !present ||
+        !dacl || !IsValidAcl(dacl)) {
+        detail = "preserved Trash baseline requires owner, group and non-NULL DACL";
+        return false;
+    }
+    return true;
+}
+
+bool verify_preserved_trash_security_handle(void *handle, const std::string &sddl_utf8,
+                                           std::string &detail) {
+    if (!validate_preserved_trash_security(sddl_utf8, detail)) return false;
+    const auto text = wide_from_utf8(sddl_utf8);
+    PSECURITY_DESCRIPTOR expected{};
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            text->c_str(), SDDL_REVISION_1, &expected, nullptr)) return false;
+    ScopedLocal expected_scope(expected);
+    PSECURITY_DESCRIPTOR actual{};
+    const auto error = GetSecurityInfo(handle, SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+        nullptr, nullptr, nullptr, nullptr, &actual);
+    if (error != ERROR_SUCCESS) {
+        detail = windows_error_detail("preserved Trash security could not be read", error);
+        return false;
+    }
+    ScopedLocal actual_scope(actual);
+    PSID expected_owner{}, actual_owner{}, expected_group{}, actual_group{};
+    PACL expected_dacl{}, actual_dacl{};
+    BOOL defaulted{}, present{};
+    SECURITY_DESCRIPTOR_CONTROL expected_control{}, actual_control{};
+    DWORD revision{};
+    const auto read = [&](PSECURITY_DESCRIPTOR sd, PSID &owner, PSID &group, PACL &dacl,
+                          SECURITY_DESCRIPTOR_CONTROL &control) {
+        return GetSecurityDescriptorOwner(sd, &owner, &defaulted) && owner && IsValidSid(owner) &&
+               GetSecurityDescriptorGroup(sd, &group, &defaulted) && group && IsValidSid(group) &&
+               GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted) && present && dacl &&
+               IsValidAcl(dacl) && GetSecurityDescriptorControl(sd, &control, &revision);
+    };
+    constexpr auto mask = SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED | SE_DACL_AUTO_INHERIT_REQ;
+    if (!read(expected, expected_owner, expected_group, expected_dacl, expected_control) ||
+        !read(actual, actual_owner, actual_group, actual_dacl, actual_control) ||
+        !EqualSid(expected_owner, actual_owner) || !EqualSid(expected_group, actual_group) ||
+        (expected_control & mask) != (actual_control & mask) ||
+        !same_acl(actual_dacl, expected_dacl)) {
+        detail = "Trash payload owner or DACL differs from its preserved baseline";
+        return false;
+    }
+    return true;
+}
+
+TrashSecurityResult verify_preserved_trash_payload(const std::filesystem::path &path,
+    const SourceSnapshot &expected, const std::string &sddl_utf8, const bool allow_revision_advance) {
+    std::string detail;
+    auto handle = open_verified_file(path, expected, READ_CONTROL, detail, allow_revision_advance);
+    if (!handle) return security_failure(OperationStatus::conflict, std::move(detail));
+    FILE_STANDARD_INFO standard{};
+    if (!GetFileInformationByHandleEx(handle->get(), FileStandardInfo, &standard, sizeof(standard)) ||
+        standard.NumberOfLinks != 1 || standard.DeletePending ||
+        !verify_preserved_trash_security_handle(handle->get(), sddl_utf8, detail)) {
+        return security_failure(OperationStatus::permission_denied,
+            detail.empty() ? "preserved Trash payload is not an ordinary single-link file" : std::move(detail));
+    }
+    auto snapshot = snapshot_from_handle(handle->get(), detail);
+    if (snapshot && (snapshot->size_bytes != expected.size_bytes ||
+                     snapshot->modified_unix_ns != expected.modified_unix_ns)) {
+        return security_failure(OperationStatus::source_changed,
+                                "preserved Trash payload content metadata changed");
+    }
+    return snapshot ? security_success(std::move(*snapshot))
                     : security_failure(OperationStatus::unknown_outcome, std::move(detail));
 }
 

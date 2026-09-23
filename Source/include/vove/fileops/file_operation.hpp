@@ -1,14 +1,21 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <string_view>
 
 namespace vove::fileops {
 
-inline constexpr std::uint32_t kFileOperationProtocolVersion = 16;
+inline constexpr std::uint32_t kFileOperationProtocolVersion = 17;
 inline constexpr std::size_t kMaximumOperationPayloadBytes = 64U * 1024U;
+inline constexpr std::size_t kMaximumTrashSecurityBaselineBytes = 16U * 1024U;
+
+enum class TrashPayloadPolicy : std::uint8_t {
+    strict,
+    preserve_permissions,
+};
 
 enum class OperationStatus : std::uint8_t {
     success,
@@ -58,6 +65,8 @@ enum class RenameMode : std::uint8_t {
     transfer_atomic_replace,
     transfer_overwrite_stage,
     transfer_overwrite_restore,
+    trash_store_preserve_permissions,
+    trash_restore_preserve_permissions,
 };
 
 enum class DeleteAction : std::uint8_t {
@@ -71,7 +80,25 @@ enum class DeleteMode : std::uint8_t {
     transfer_temp_cleanup,
     transfer_source_commit,
     transfer_overwrite_cleanup,
+    trash_purge_preserve_permissions,
 };
+
+[[nodiscard]] constexpr bool preserves_trash_permissions(const RenameMode mode) noexcept {
+    return mode == RenameMode::trash_store_preserve_permissions ||
+           mode == RenameMode::trash_restore_preserve_permissions;
+}
+[[nodiscard]] constexpr bool preserves_trash_permissions(const DeleteMode mode) noexcept {
+    return mode == DeleteMode::trash_purge_preserve_permissions;
+}
+[[nodiscard]] constexpr bool is_trash_store_mode(const RenameMode mode) noexcept {
+    return mode == RenameMode::trash_internal || mode == RenameMode::trash_store_preserve_permissions;
+}
+[[nodiscard]] constexpr bool is_trash_restore_mode(const RenameMode mode) noexcept {
+    return mode == RenameMode::trash_restore || mode == RenameMode::trash_restore_preserve_permissions;
+}
+[[nodiscard]] constexpr bool is_trash_purge_mode(const DeleteMode mode) noexcept {
+    return mode == DeleteMode::trash_purge || preserves_trash_permissions(mode);
+}
 
 enum class DeleteTargetKind : std::uint8_t {
     local,
@@ -116,6 +143,7 @@ struct RenameRequest {
     std::filesystem::path destination_anchor_path;
     std::string destination_anchor_identity_utf8;
     SourceSnapshot expected_destination{};
+    std::string trash_security_baseline_sddl_utf8{};
 };
 
 struct DeleteRequest {
@@ -130,6 +158,7 @@ struct DeleteRequest {
     std::filesystem::path guard_path;
     SourceSnapshot expected_guard;
     std::string guard_parent_identity_utf8;
+    std::string trash_security_baseline_sddl_utf8{};
 };
 
 struct CreateDirectoryRequest {

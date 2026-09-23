@@ -3,6 +3,9 @@
 #include "vove/core/reserved_names.hpp"
 
 #include "delete_identity.hpp"
+#ifdef _WIN32
+#include "windows/trash_security.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -18,6 +21,7 @@ namespace {
 constexpr std::uint32_t transactionMagic = 0x31525456U;
 constexpr std::uint32_t previousTransactionVersion = 8;
 constexpr std::uint32_t legacyTransactionVersion = 7;
+constexpr std::uint32_t directoryTransactionVersion = 9;
 constexpr std::size_t maximumPayloadBytes = std::size_t{4} * 1024U * 1024U;
 
 template <typename Integer>
@@ -401,6 +405,17 @@ bool valid_trash_transaction(const TrashTransaction &transaction, std::string &d
             return false;
         }
 #ifdef _WIN32
+        const auto preserve = item.payload_policy == TrashPayloadPolicy::preserve_permissions;
+        if ((item.payload_policy != TrashPayloadPolicy::strict && !preserve) ||
+            (preserve && (item.kind != TrashItemKind::regular_file ||
+                          item.security_state != TrashSecurityState::original ||
+                          item.original_security_descriptor_sddl_utf8.size() >
+                              kMaximumTrashSecurityBaselineBytes ||
+                          !detail::validate_preserved_trash_security(
+                              item.original_security_descriptor_sddl_utf8, detail_utf8)))) {
+            detail_utf8 = "trash payload policy is invalid";
+            return false;
+        }
         const auto source_hardened_during_store =
             item.location == TrashItemLocation::source &&
             item.security_state == TrashSecurityState::hardened &&
@@ -411,13 +426,14 @@ bool valid_trash_transaction(const TrashTransaction &transaction, std::string &d
             (item.location == TrashItemLocation::source &&
              item.security_state != TrashSecurityState::original &&
              !source_hardened_during_store) ||
-            (item.location != TrashItemLocation::source &&
+            (!preserve && item.location != TrashItemLocation::source &&
              item.security_state != TrashSecurityState::hardened)) {
             detail_utf8 = "trash transaction item security state is inconsistent";
             return false;
         }
 #else
-        if (!item.original_security_descriptor_sddl_utf8.empty() ||
+        if (item.payload_policy != TrashPayloadPolicy::strict ||
+            !item.original_security_descriptor_sddl_utf8.empty() ||
             item.security_state != TrashSecurityState::original ||
             !valid_utf8(item.storage_identity_utf8) ||
             (!item.storage_identity_utf8.empty() &&
@@ -497,7 +513,8 @@ TrashTransaction prepare_trash_transaction(const std::vector<TrashSource> &sourc
              .location = TrashItemLocation::source,
              .security_state = TrashSecurityState::original,
              .original_security_descriptor_sddl_utf8 =
-                 sources[index].original_security_descriptor_sddl_utf8});
+                 sources[index].original_security_descriptor_sddl_utf8,
+             .payload_policy = sources[index].payload_policy});
     }
     std::string detail;
     if (!valid_trash_transaction(transaction, detail)) {
@@ -556,6 +573,7 @@ std::vector<std::byte> encode_trash_transaction(const TrashTransaction &transact
         append_integer(payload, static_cast<std::uint8_t>(item.location));
         append_integer(payload, static_cast<std::uint8_t>(item.security_state));
         append_string(payload, item.original_security_descriptor_sddl_utf8);
+        append_integer(payload, static_cast<std::uint8_t>(item.payload_policy));
     }
     if (payload.size() > maximumPayloadBytes) {
         throw std::length_error("trash transaction exceeds the journal limit");
@@ -585,6 +603,7 @@ bool decode_trash_transaction(const std::span<const std::byte> payload,
         magic != transactionMagic ||
         (decoded.version != legacyTransactionVersion &&
          decoded.version != previousTransactionVersion &&
+         decoded.version != directoryTransactionVersion &&
          decoded.version != kTrashTransactionVersion) ||
         phase > static_cast<std::uint8_t>(TrashPhase::purged) ||
         step > static_cast<std::uint8_t>(TrashStep::purge) ||
@@ -614,7 +633,7 @@ bool decode_trash_transaction(const std::span<const std::byte> payload,
             !cursor.read(item.current_snapshot.size_bytes) ||
             !cursor.read(item.current_snapshot.modified_unix_ns) ||
             !cursor.read_string(item.current_snapshot.source_revision_utf8) ||
-            (decoded.version == kTrashTransactionVersion &&
+            (decoded.version >= directoryTransactionVersion &&
              (!cursor.read(item_kind) ||
               item_kind > static_cast<std::uint8_t>(TrashItemKind::directory) ||
               !cursor.read(item.payload_bytes) || !cursor.read(item.directory_purge_cursor) ||
@@ -626,10 +645,10 @@ bool decode_trash_transaction(const std::span<const std::byte> payload,
             detail_utf8 = "trash transaction item is invalid or truncated";
             return false;
         }
-        item.kind = decoded.version == kTrashTransactionVersion
+        item.kind = decoded.version >= directoryTransactionVersion
                         ? static_cast<TrashItemKind>(item_kind)
                         : TrashItemKind::regular_file;
-        if (decoded.version != kTrashTransactionVersion) {
+        if (decoded.version < directoryTransactionVersion) {
             item.payload_bytes = item.current_snapshot.size_bytes;
         }
         item.directory_entries.reserve(directory_entry_count);
@@ -678,6 +697,15 @@ bool decode_trash_transaction(const std::span<const std::byte> payload,
         item.current = path_from_utf8(current);
         item.location = static_cast<TrashItemLocation>(location);
         item.security_state = static_cast<TrashSecurityState>(security_state);
+        if (decoded.version >= 10) {
+            std::uint8_t policy{};
+            if (!cursor.read(policy) ||
+                policy > static_cast<std::uint8_t>(TrashPayloadPolicy::preserve_permissions)) {
+                detail_utf8 = "trash payload policy is invalid or truncated";
+                return false;
+            }
+            item.payload_policy = static_cast<TrashPayloadPolicy>(policy);
+        }
         decoded.items.push_back(std::move(item));
     }
     decoded.version = kTrashTransactionVersion;

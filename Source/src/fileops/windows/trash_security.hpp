@@ -34,6 +34,7 @@ struct TrashSecurityResult {
     SourceSnapshot snapshot;
     std::string original_sddl_utf8;
     std::string detail_utf8;
+    TrashPayloadPolicy payload_policy{TrashPayloadPolicy::strict};
 
     [[nodiscard]] bool ok() const noexcept {
         return status == OperationStatus::success;
@@ -42,7 +43,17 @@ struct TrashSecurityResult {
 
 [[nodiscard]] TrashSecurityResult capture_trash_security(const std::filesystem::path &path,
                                                          const SourceSnapshot &expected,
-                                                         bool directory = false);
+                                                         bool directory = false,
+                                                         bool allow_foreign_file_owner = false);
+
+[[nodiscard]] bool validate_preserved_trash_security(const std::string &sddl_utf8,
+                                                    std::string &detail_utf8);
+[[nodiscard]] bool verify_preserved_trash_security_handle(void *handle,
+                                                         const std::string &sddl_utf8,
+                                                         std::string &detail_utf8);
+[[nodiscard]] TrashSecurityResult verify_preserved_trash_payload(
+    const std::filesystem::path &path, const SourceSnapshot &expected,
+    const std::string &sddl_utf8, bool allow_revision_advance = false);
 
 [[nodiscard]] TrashSecurityResult harden_trash_payload(const std::filesystem::path &path,
                                                        const SourceSnapshot &expected,

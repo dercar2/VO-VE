@@ -6,6 +6,7 @@
 
 #include "../file_operation_platform.hpp"
 #include "../file_in_use_error.hpp"
+#include "trash_security.hpp"
 #include "windows/delete_target.hpp"
 #include "windows/file_identity.hpp"
 #include "windows/file_time.hpp"
@@ -564,6 +565,23 @@ OperationResult verify_rename_destination_anchor(const RenameRequest &request) {
 }
 
 OperationResult rename_no_replace(const RenameRequest &request) {
+    TrashDirectoryLease preserved_vault, preserved_container;
+    if (preserves_trash_permissions(request.mode)) {
+        const auto &payload = is_trash_store_mode(request.mode) ? request.destination : request.source;
+        std::wstring sid;
+        std::string detail;
+        if (current_user_sid_text(sid, detail)) {
+            preserved_vault = pin_owned_trash_directory(payload.parent_path().parent_path(), sid, detail);
+            if (preserved_vault.valid()) {
+                preserved_container = pin_owned_trash_directory(payload.parent_path(), sid, detail);
+            }
+        }
+        if (!preserved_vault.valid() || !preserved_container.valid()) {
+            return {.operation_id = request.operation_id, .status = OperationStatus::permission_denied,
+                    .evidence = OperationEvidence::no_commit, .confirmed_snapshot = {},
+                    .detail_utf8 = std::move(detail)};
+        }
+    }
     const auto failed_before_commit = [&request](const DWORD code, const std::string_view stage) {
         auto result = windows_failure(request, code, OperationEvidence::no_commit);
         result.detail_utf8 += " while ";
@@ -571,7 +589,7 @@ OperationResult rename_no_replace(const RenameRequest &request) {
         return result;
     };
     const auto object_is_directory = request.object_kind == OperationObjectKind::directory;
-    const DWORD source_access = object_is_directory
+    const DWORD source_access = (object_is_directory || preserves_trash_permissions(request.mode))
                                     ? FILE_READ_ATTRIBUTES | READ_CONTROL | DELETE | SYNCHRONIZE
                                     : GENERIC_READ | DELETE;
     const DWORD source_flags =
@@ -627,10 +645,14 @@ OperationResult rename_no_replace(const RenameRequest &request) {
                 .detail_utf8 = "opened source path differs from the requested path"};
     }
     const auto trash_mode =
-        request.mode == RenameMode::trash_internal || request.mode == RenameMode::trash_restore;
+        is_trash_store_mode(request.mode) || is_trash_restore_mode(request.mode);
     if (trash_mode) {
         std::string owner_detail;
-        if (!current_user_owns_handle(source.get(), owner_detail)) {
+        const auto valid_owner = preserves_trash_permissions(request.mode)
+            ? verify_preserved_trash_security_handle(source.get(), request.trash_security_baseline_sddl_utf8,
+                                                     owner_detail)
+            : current_user_owns_handle(source.get(), owner_detail);
+        if (!valid_owner) {
             return {.operation_id = request.operation_id,
                     .status = OperationStatus::permission_denied,
                     .evidence = OperationEvidence::no_commit,
@@ -682,7 +704,7 @@ OperationResult rename_no_replace(const RenameRequest &request) {
                     .confirmed_snapshot = {},
                     .detail_utf8 = "VO-VE Trash requires a fixed local NTFS volume"};
         }
-        if (request.mode == RenameMode::trash_internal &&
+        if (is_trash_store_mode(request.mode) &&
             (attributes.FileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) != 0) {
             return {.operation_id = request.operation_id,
                     .status = OperationStatus::unsupported,
@@ -1068,9 +1090,28 @@ OperationResult rename_no_replace(const RenameRequest &request) {
             return windows_failure(request, close_error, OperationEvidence::no_commit);
         }
     }
+    if (preserves_trash_permissions(request.mode)) {
+        std::string detail;
+        if (!verify_preserved_trash_security_handle(source.get(), request.trash_security_baseline_sddl_utf8,
+                                                    detail)) {
+            return {.operation_id = request.operation_id, .status = OperationStatus::source_changed,
+                    .evidence = OperationEvidence::no_commit, .source_present = true,
+                    .confirmed_snapshot = {}, .detail_utf8 = std::move(detail)};
+        }
+    }
     const auto rename_status = rename_handle_no_replace_at(
         source.get(), destination_directory.get(), request.destination.filename(), replacement);
     if (rename_status >= 0) {
+        if (preserves_trash_permissions(request.mode)) {
+            std::string detail;
+            if (!verify_preserved_trash_security_handle(source.get(), request.trash_security_baseline_sddl_utf8,
+                                                        detail)) {
+                return {.operation_id = request.operation_id, .status = OperationStatus::unknown_outcome,
+                        .evidence = OperationEvidence::committed, .destination_present = true,
+                        .destination_matches_source = true, .confirmed_snapshot = {},
+                        .detail_utf8 = std::move(detail)};
+            }
+        }
         const auto committed_path = final_path(source.get());
         if (!committed_path || !same_path(*committed_path, request.destination)) {
             auto failure =
@@ -1189,9 +1230,25 @@ OperationResult rename_no_replace(const RenameRequest &request) {
 }
 
 OperationResult permanent_delete_remote(const DeleteRequest &request) {
+    TrashDirectoryLease preserved_vault, preserved_container;
+    if (preserves_trash_permissions(request.mode)) {
+        std::wstring sid;
+        std::string detail;
+        if (current_user_sid_text(sid, detail)) {
+            preserved_vault = pin_owned_trash_directory(request.source.parent_path().parent_path(), sid, detail);
+            if (preserved_vault.valid()) {
+                preserved_container = pin_owned_trash_directory(request.source.parent_path(), sid, detail);
+            }
+        }
+        if (!preserved_vault.valid() || !preserved_container.valid()) {
+            return {.operation_id = request.operation_id, .status = OperationStatus::permission_denied,
+                    .evidence = OperationEvidence::no_commit, .confirmed_snapshot = {},
+                    .detail_utf8 = std::move(detail)};
+        }
+    }
     const auto object_is_directory = request.object_kind == OperationObjectKind::directory;
     const auto source_access = FILE_READ_ATTRIBUTES | DELETE |
-                               (request.mode == DeleteMode::trash_purge ? READ_CONTROL : 0U);
+                               (is_trash_purge_mode(request.mode) ? READ_CONTROL : 0U);
     const auto source_flags = FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS;
     ScopedHandle source(
         CreateFileW(request.source.c_str(), source_access, 0, nullptr, OPEN_EXISTING,
@@ -1237,9 +1294,13 @@ OperationResult permanent_delete_remote(const DeleteRequest &request) {
                 .confirmed_snapshot = {},
                 .detail_utf8 = "file transfer deletes only ordinary single-link files"};
     }
-    if (request.mode == DeleteMode::trash_purge) {
+    if (is_trash_purge_mode(request.mode)) {
         std::string owner_detail;
-        if (!current_user_owns_handle(source.get(), owner_detail)) {
+        const auto valid_owner = preserves_trash_permissions(request.mode)
+            ? verify_preserved_trash_security_handle(source.get(), request.trash_security_baseline_sddl_utf8,
+                                                     owner_detail)
+            : current_user_owns_handle(source.get(), owner_detail);
+        if (!valid_owner) {
             return {.operation_id = request.operation_id,
                     .status = OperationStatus::permission_denied,
                     .evidence = OperationEvidence::no_commit,
@@ -1248,7 +1309,7 @@ OperationResult permanent_delete_remote(const DeleteRequest &request) {
                     .detail_utf8 = std::move(owner_detail)};
         }
     }
-    if (!object_is_directory && request.mode == DeleteMode::trash_purge &&
+    if (!object_is_directory && is_trash_purge_mode(request.mode) &&
         standard.NumberOfLinks != 1) {
         return {.operation_id = request.operation_id,
                 .status = OperationStatus::unsupported,
@@ -1286,7 +1347,7 @@ OperationResult permanent_delete_remote(const DeleteRequest &request) {
                     .detail_utf8 =
                         "permanent delete is restricted to verified SMB filesystems"};
         }
-    } else if (request.mode == DeleteMode::trash_purge) {
+    } else if (is_trash_purge_mode(request.mode)) {
         const auto remote_query = GetFileInformationByHandleEx(source.get(), FileRemoteProtocolInfo,
                                                                &remote, sizeof(remote)) != FALSE;
         if (remote_query && platform::windows_detail::is_smb_remote_protocol(remote)) {
@@ -1514,8 +1575,17 @@ OperationResult permanent_delete_remote(const DeleteRequest &request) {
         }
     }
 
+    if (preserves_trash_permissions(request.mode)) {
+        std::string detail;
+        if (!verify_preserved_trash_security_handle(source.get(), request.trash_security_baseline_sddl_utf8,
+                                                    detail)) {
+            return {.operation_id = request.operation_id, .status = OperationStatus::source_changed,
+                    .evidence = OperationEvidence::no_commit, .source_present = true,
+                    .confirmed_snapshot = {}, .detail_utf8 = std::move(detail)};
+        }
+    }
     auto disposition_flags = static_cast<DWORD>(FILE_DISPOSITION_FLAG_DELETE);
-    if (request.mode == DeleteMode::trash_purge) {
+    if (is_trash_purge_mode(request.mode)) {
         disposition_flags |= static_cast<DWORD>(FILE_DISPOSITION_FLAG_POSIX_SEMANTICS);
     }
     FILE_DISPOSITION_INFO_EX extended_disposition{.Flags = disposition_flags};

@@ -456,6 +456,26 @@ preview</source>
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Invalid Trash operation request</source>
+        <translation>Некорректный запрос операции с Корзиной</translation>
+    </message>
+    <message>
+        <source>No permission for this Trash operation</source>
+        <translation>Нет прав на эту операцию с Корзиной</translation>
+    </message>
+    <message>
+        <source>The operation timed out</source>
+        <translation>Превышено время ожидания операции</translation>
+    </message>
+    <message>
+        <source>This Trash operation is not supported</source>
+        <translation>Эта операция с Корзиной не поддерживается</translation>
+    </message>
+    <message>
+        <source>Trash operation I/O error</source>
+        <translation>Ошибка ввода-вывода при операции с Корзиной</translation>
+    </message>
+    <message>
         <source>VO-VE Trash is unavailable on this resource. Originals were not changed</source>
         <translation>Корзина VO-VE недоступна на этом ресурсе. Исходные объекты не изменены</translation>
     </message>
@@ -2894,7 +2914,7 @@ Stage: %2</source>
         <location filename="../src/ui/qt/translation_manager.cpp" line="12"/>
         <location filename="../src/ui/qt/translation_manager.cpp" line="19"/>
         <source>VOVE_TRANSLATION_PACK_COMPLETE</source>
-        <translation>ru|5e3544edefe2e6d6fc097c79496ece892acea7fdbd36a9a2a49eed0747c07d17</translation>
+        <translation>ru|ef12c40b9fed7d0dba009af3a0809b7ef411ef4e2e7000c558f85708c85208cf</translation>
     </message>
 </context>
 <context>

@@ -31,7 +31,7 @@ bool valid_status(const std::uint8_t value) {
 }
 
 bool valid_mode(const std::uint8_t value) {
-    return value <= static_cast<std::uint8_t>(RenameMode::transfer_overwrite_restore);
+    return value <= static_cast<std::uint8_t>(RenameMode::trash_restore_preserve_permissions);
 }
 
 bool replacement_mode(const RenameMode mode) noexcept {
@@ -40,7 +40,7 @@ bool replacement_mode(const RenameMode mode) noexcept {
 }
 
 bool valid_delete_mode(const std::uint8_t value) {
-    return value <= static_cast<std::uint8_t>(DeleteMode::transfer_overwrite_cleanup);
+    return value <= static_cast<std::uint8_t>(DeleteMode::trash_purge_preserve_permissions);
 }
 
 bool valid_utf8(const std::string_view text) noexcept {
@@ -121,6 +121,7 @@ std::vector<std::byte> encode_rename_request(const RenameRequest &request) {
         append_integer(payload, request.expected_destination.modified_unix_ns);
         append_string(payload, request.expected_destination.source_revision_utf8);
     }
+    append_string(payload, request.trash_security_baseline_sddl_utf8);
     if (payload.size() > kMaximumOperationPayloadBytes) {
         throw std::length_error("file operation request exceeds the protocol limit");
     }
@@ -162,6 +163,10 @@ bool decode_rename_request(const std::span<const std::byte> payload, RenameReque
          !cursor.read(request.expected_destination.modified_unix_ns) ||
          !cursor.read_string(request.expected_destination.source_revision_utf8))) {
         error = "file replacement authorization is truncated";
+        return false;
+    }
+    if (!cursor.read_string(request.trash_security_baseline_sddl_utf8)) {
+        error = "Trash security baseline is truncated";
         return false;
     }
     if (magic != requestMagic || version != kFileOperationProtocolVersion || reserved != 0 ||
@@ -222,6 +227,7 @@ std::vector<std::byte> encode_delete_request(const DeleteRequest &request) {
     append_integer(payload, request.expected_guard.modified_unix_ns);
     append_string(payload, request.expected_guard.source_revision_utf8);
     append_string(payload, request.guard_parent_identity_utf8);
+    append_string(payload, request.trash_security_baseline_sddl_utf8);
     if (payload.size() > kMaximumOperationPayloadBytes) {
         throw std::length_error("delete request exceeds the protocol limit");
     }
@@ -252,7 +258,8 @@ bool decode_delete_request(const std::span<const std::byte> payload, DeleteReque
         !cursor.read(request.expected_guard.size_bytes) ||
         !cursor.read(request.expected_guard.modified_unix_ns) ||
         !cursor.read_string(request.expected_guard.source_revision_utf8) ||
-        !cursor.read_string(request.guard_parent_identity_utf8)) {
+        !cursor.read_string(request.guard_parent_identity_utf8) ||
+        !cursor.read_string(request.trash_security_baseline_sddl_utf8)) {
         error = "delete request is truncated";
         return false;
     }

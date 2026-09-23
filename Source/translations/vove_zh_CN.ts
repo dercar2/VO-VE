@@ -456,6 +456,26 @@ preview</source>
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Invalid Trash operation request</source>
+        <translation>回收站操作请求无效</translation>
+    </message>
+    <message>
+        <source>No permission for this Trash operation</source>
+        <translation>没有执行此回收站操作的权限</translation>
+    </message>
+    <message>
+        <source>The operation timed out</source>
+        <translation>操作超时</translation>
+    </message>
+    <message>
+        <source>This Trash operation is not supported</source>
+        <translation>不支持此回收站操作</translation>
+    </message>
+    <message>
+        <source>Trash operation I/O error</source>
+        <translation>回收站操作发生输入/输出错误</translation>
+    </message>
+    <message>
         <source>VO-VE Trash is unavailable on this resource. Originals were not changed</source>
         <translation>此位置无法使用 VO-VE 回收站。原始项目未被更改</translation>
     </message>
@@ -2888,7 +2908,7 @@ Stage: %2</source>
         <location filename="../src/ui/qt/translation_manager.cpp" line="12"/>
         <location filename="../src/ui/qt/translation_manager.cpp" line="19"/>
         <source>VOVE_TRANSLATION_PACK_COMPLETE</source>
-        <translation>zh-CN|5e3544edefe2e6d6fc097c79496ece892acea7fdbd36a9a2a49eed0747c07d17</translation>
+        <translation>zh-CN|ef12c40b9fed7d0dba009af3a0809b7ef411ef4e2e7000c558f85708c85208cf</translation>
     </message>
 </context>
 <context>

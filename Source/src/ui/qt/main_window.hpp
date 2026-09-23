@@ -100,6 +100,9 @@ class MainWindow final : public QMainWindow {
     bool eventFilter(QObject *watched, QEvent *event) override;
 
   private:
+#ifdef VOVE_UI_TEST_HOOKS
+    friend struct MainWindowTrashTestAccess;
+#endif
     enum class PreviewRuntimeState : std::uint8_t {
         online,
         offline,
@@ -230,13 +233,14 @@ class MainWindow final : public QMainWindow {
         bool clipboard_copy{};
     };
 
-    struct PendingRenamePreparation {
+    struct PendingDirectoryPreparation {
         QList<core::DirectoryEntry> entries;
         QList<qsizetype> indices;
         qsizetype index{};
         catalog::RequestGeneration generation{};
         bool received{};
         bool awaiting_worker_reap{};
+        bool trash_target{};
         std::chrono::steady_clock::time_point readers_deadline;
         std::function<void(QList<core::DirectoryEntry>)> ready;
     };
@@ -315,15 +319,17 @@ class MainWindow final : public QMainWindow {
     void paste_objects();
     void update_clipboard_actions();
     void prompt_rename_selected();
-    void prepare_rename_entries(QList<core::DirectoryEntry> entries, QList<qsizetype> indices,
-                               std::function<void(QList<core::DirectoryEntry>)> ready);
-    void poll_rename_preparation();
-    void fail_rename_preparation();
+    void prepare_directory_entries(QList<core::DirectoryEntry> entries, QList<qsizetype> indices,
+                               std::function<void(QList<core::DirectoryEntry>)> ready,
+                               bool trash_target = false);
+    void poll_directory_preparation();
+    void fail_directory_preparation();
     void submit_single_rename(const core::DirectoryEntry &entry, const QString &destination_name);
     void submit_batch_rename(const fileops::BatchRenamePlan &plan,
                              const QList<core::DirectoryEntry> &entries);
     void prompt_delete_selected();
     [[nodiscard]] bool prompt_move_entries_to_trash(const QList<core::DirectoryEntry> &entries);
+    [[nodiscard]] bool submit_trash_move(const QList<core::DirectoryEntry> &entries);
     void prompt_batch_rename_selected(const QList<core::DirectoryEntry> &entries);
     void prompt_create_directory();
     void prompt_transfer_selected(fileops::FileTransferKind kind);
@@ -618,7 +624,7 @@ class MainWindow final : public QMainWindow {
     std::optional<PendingCreateDirectoryPreparation> pendingCreateDirectoryPreparation_;
     std::optional<PendingExternalDirectoryDrop> pendingExternalDirectoryDrop_;
     std::optional<PendingExternalTransferDrop> pendingExternalTransferDrop_;
-    std::optional<PendingRenamePreparation> pendingRenamePreparation_;
+    std::optional<PendingDirectoryPreparation> pendingDirectoryPreparation_;
     bool renamePreviewSuspended_{};
     std::optional<fileops::TrashCatalogResult> trashCatalog_;
     QHash<qulonglong, QString> trashManifestByEntry_;

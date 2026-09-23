@@ -1,7 +1,7 @@
 # VO-VE 0.2.20 Distribution
 
-Application source commit: c318544645c89c8fcc7203277c7c6ac01013e3c7.
-Build label: PREVIEW-ISOLATION-20260923.
+Application source commit: a94118241bca5f7aea34975ca5fc392ae9ec1671.
+Build label: PREVIEW-TRASH-20260923.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 For the Source/ migration, the public snapshot belongs in Source/ in the release tag's

@@ -11,6 +11,7 @@
 #include <system_error>
 
 #ifdef _WIN32
+#include "windows/trash_security.hpp"
 #include "windows/file_identity.hpp"
 #include "windows/file_time.hpp"
 #define WIN32_LEAN_AND_MEAN
@@ -336,14 +337,29 @@ OperationResult reconcile_rename(const RenameRequest &request) {
     }
 
     const bool trash_mode =
-        request.mode == RenameMode::trash_internal || request.mode == RenameMode::trash_restore;
-    const bool source_is_private_payload = request.mode == RenameMode::trash_restore;
+        is_trash_store_mode(request.mode) || is_trash_restore_mode(request.mode);
+    const bool source_is_private_payload = is_trash_restore_mode(request.mode);
     const auto expected_storage =
         trash_mode ? std::string_view(request.source_parent_identity_utf8) : std::string_view{};
     const auto source =
         observe_object(request.source, request.expected_source, trash_mode, request.object_kind);
     const auto destination = observe_object(request.destination, request.expected_source,
                                             trash_mode, request.object_kind);
+#ifdef _WIN32
+    if (preserves_trash_permissions(request.mode)) {
+        for (const auto &path : {request.source, request.destination}) {
+            const auto &observed = path == request.source ? source : destination;
+            if (!observed.present || !observed.stable_identity_matches) continue;
+            const auto checked = verify_preserved_trash_payload(path, request.expected_source,
+                request.trash_security_baseline_sddl_utf8, true);
+            if (!checked.ok()) {
+                result.status = OperationStatus::source_changed;
+                result.detail_utf8 = checked.detail_utf8;
+                return result;
+            }
+        }
+    }
+#endif
     const auto source_storage_matches = expected_storage_matches(expected_storage, source);
     const auto destination_storage_matches =
         expected_storage_matches(expected_storage, destination);
@@ -449,8 +465,8 @@ OperationResult execute_rename(const RenameRequest &request) {
                 .detail_utf8 = std::move(validation)};
     }
     const bool trash_mode =
-        request.mode == RenameMode::trash_internal || request.mode == RenameMode::trash_restore;
-    const bool source_is_private_payload = request.mode == RenameMode::trash_restore;
+        is_trash_store_mode(request.mode) || is_trash_restore_mode(request.mode);
+    const bool source_is_private_payload = is_trash_restore_mode(request.mode);
     const auto expected_storage =
         trash_mode ? std::string_view(request.source_parent_identity_utf8) : std::string_view{};
     const auto source =
@@ -515,11 +531,22 @@ OperationResult reconcile_delete(const DeleteRequest &request) {
         return result;
     }
 
-    const bool trash_purge = request.mode == DeleteMode::trash_purge;
+    const bool trash_purge = is_trash_purge_mode(request.mode);
     const auto expected_storage =
         trash_purge ? std::string_view(request.source_parent_identity_utf8) : std::string_view{};
     const auto source =
         observe_object(request.source, request.expected_source, trash_purge, request.object_kind);
+#ifdef _WIN32
+    if (preserves_trash_permissions(request.mode) && source.present && source.stable_identity_matches) {
+        const auto checked = verify_preserved_trash_payload(request.source, request.expected_source,
+            request.trash_security_baseline_sddl_utf8, true);
+        if (!checked.ok()) {
+            result.status = OperationStatus::source_changed;
+            result.detail_utf8 = checked.detail_utf8;
+            return result;
+        }
+    }
+#endif
     const auto source_storage_matches = expected_storage_matches(expected_storage, source);
     const auto source_matches_after_remount =
         trash_purge && source.remote_smb &&
@@ -593,20 +620,20 @@ OperationResult execute_delete(const DeleteRequest &request) {
     }
     const auto source =
         observe_object(request.source, request.expected_source,
-                       request.mode == DeleteMode::trash_purge, request.object_kind);
-    const auto trash_purge = request.mode == DeleteMode::trash_purge;
+                       is_trash_purge_mode(request.mode), request.object_kind);
+    const auto trash_purge = is_trash_purge_mode(request.mode);
     const auto expected_storage =
         trash_purge ? std::string_view(request.source_parent_identity_utf8) : std::string_view{};
     const auto source_storage_matches = expected_storage_matches(expected_storage, source);
     const auto source_matches = source.matches && source_storage_matches;
     if (!source.present || !source_matches) {
         const auto refreshable_after_remount =
-            request.mode == DeleteMode::trash_purge &&
+            is_trash_purge_mode(request.mode) &&
             same_private_trash_payload_after_remount(request.expected_source, source.snapshot,
                                                      request.source_parent_identity_utf8,
                                                      source.storage_identity_utf8);
         if ((request.mode == DeleteMode::transfer_temp_cleanup ||
-             request.mode == DeleteMode::trash_purge) &&
+             is_trash_purge_mode(request.mode)) &&
             source.present && source.remote_smb &&
             ((source_storage_matches &&
               same_object_after_rename(request.expected_source, source.snapshot)) ||

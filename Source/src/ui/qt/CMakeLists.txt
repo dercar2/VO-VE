@@ -1310,6 +1310,13 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     endif()
     add_test(NAME vove-settings-ui-tests COMMAND vove-qt-shell-tests)
     add_test(NAME vove-file-in-use-ui-tests COMMAND vove-qt-shell-tests)
+    add_test(NAME vove-trash-error-ui-tests COMMAND vove-qt-shell-tests)
+    set_tests_properties(vove-trash-error-ui-tests PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_TRASH_ERROR_ONLY=1" TIMEOUT 60)
+    if(WIN32)
+        set_tests_properties(vove-trash-error-ui-tests PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
+    endif()
     set_tests_properties(vove-file-in-use-ui-tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_FILE_IN_USE_UI_ONLY=1" TIMEOUT 30)
     if(WIN32)
