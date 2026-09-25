@@ -39,11 +39,20 @@ VO-VE sits somewhere in between: it works with existing folders like a file mana
 7. A permanent large viewing pane, including for multipage documents; zooming and panning a loaded static preview without opening an editor.
 8. Colour-coded formats without placing a label over the artwork itself.
 9. Folder mosaics made from previews of the documents inside.
+
+   ![Folder content previews](Site/assets/images/Folder.gif)
+
 10. A persistent, size-limited cache: browse again without reprocessing heavy files.
 11. Colour management using embedded ICC profiles.
 12. Page counts and page navigation for multipage documents.
+
+    ![Multipage document navigation](Site/assets/images/Pages.gif)
+
 13. Four themes and an original vintage interface inspired by the aesthetics of circuit boards.
 14. Viewing files from an entire subfolder tree together: "Eye" mode, with a clearly visible border around the thumbnail area (a feature borrowed from Total Commander - Ctrl+B).
+
+    ![Eye mode: files from all subfolders](Site/assets/images/Eyes.gif)
+
 15. Natural filename sorting (`2, 17, 187`) and restoring your position and selection when returning to a folder.
 16. Modification date and time below the selected filename; a recent time is highlighted with a coloured background.
 
