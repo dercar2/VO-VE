@@ -909,7 +909,8 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
                        fileops::FileTransferServiceOptions file_transfer_options,
                        QString global_search_helper_override)
     : QMainWindow(parent), delegate_(this),
-      previewClient_(this, 12'000, std::move(preview_helper_override)),
+      previewClient_(this, 12'000, preview_helper_override),
+      gifAnimationClient_(this, std::move(preview_helper_override)),
       folderMosaicController_(previewClient_),
       globalSearchClient_(this, std::move(global_search_helper_override)),
       session_(source_, listModel_), directoryMonitor_(this),
@@ -933,6 +934,50 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
       externalOpenCoordinator_(external_open_helper_override()) {
     install_main_menu_dialog_frames(this);
     build_ui();
+    gifAnimationClient_.frame_ready = [this](QImage image, const QString &key, bool animated) {
+        if (key != selectedAnimationKey_ || selectedEntryId_ == 0)
+            return;
+        const bool first_frame = selectedAnimationImage_.isNull();
+        selectedAnimationImage_ = std::move(image);
+        selectedAnimationAnimated_ = animated;
+        previewCanvas_->set_animation_frame(selectedAnimationImage_, key);
+        previewCanvas_->set_animation_state(!animated ? ZoomPreview::AnimationState::hidden
+            : gifAnimationClient_.paused() ? ZoomPreview::AnimationState::paused
+                                           : ZoomPreview::AnimationState::playing);
+        if (first_frame) {
+            update_page_navigation(0, 1);
+            update_preview_support_label(true);
+            selectedColorSummary_ = QStringLiteral("RGB");
+            update_status(lastUpdate_);
+        }
+    };
+    gifAnimationClient_.finished = [this](bool success, const QString &detail) {
+        if (selectedAnimationKey_.isEmpty())
+            return;
+        if (success) {
+            previewCanvas_->set_animation_state(selectedAnimationAnimated_
+                ? ZoomPreview::AnimationState::finished : ZoomPreview::AnimationState::hidden);
+        } else {
+            selectedAnimationFailed_ = true;
+            previewCanvas_->set_animation_state(ZoomPreview::AnimationState::hidden);
+            previewSupport_->setText(QCoreApplication::translate("MainWindow",
+                "Animation unavailable"));
+            previewSupport_->setToolTip(detail);
+            previewSupport_->show();
+            if (selectedAnimationImage_.isNull())
+                ensure_selected_preview();
+        }
+    };
+    previewCanvas_->animation_toggle = [this] {
+        if (gifAnimationClient_.active()) {
+            gifAnimationClient_.set_paused(!gifAnimationClient_.paused());
+            previewCanvas_->set_animation_state(gifAnimationClient_.paused()
+                ? ZoomPreview::AnimationState::paused : ZoomPreview::AnimationState::playing);
+        } else if (!selectedAnimationKey_.isEmpty()) {
+            stop_selected_animation();
+            ensure_selected_preview();
+        }
+    };
     installEventFilter(this);
     directoryMonitor_.refresh_requested = [this] { return refresh_catalog_automatically(); };
     load_settings();
@@ -951,6 +996,7 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
 }
 
 MainWindow::~MainWindow() {
+    gifAnimationClient_.stop();
     directoryMonitor_.stop();
     // The model cancels outstanding reads while its DirectorySource is still alive.
     delete treeModel_;
@@ -983,6 +1029,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         (event->type() == QEvent::Show || event->type() == QEvent::Hide ||
          event->type() == QEvent::WindowStateChange)) {
         QTimer::singleShot(0, this, [this] { update_directory_monitor_visibility(); });
+        QTimer::singleShot(0, this, [this] {
+            gifAnimationClient_.set_suspended(!isVisible() || isMinimized());
+        });
     }
     if (watched == previewModified_ && event != nullptr && previewCanvas_ != nullptr &&
         (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange ||
@@ -3074,6 +3123,7 @@ bool MainWindow::refresh_catalog_automatically() {
     directoryMonitor_.scan_started();
     session_.refresh();
     lastUpdate_.state = catalog::CatalogSessionState::loading;
+    update_clipboard_actions();
     pollTimer_->setInterval(16);
     pollTimer_->start();
     return true;
@@ -3091,6 +3141,7 @@ void MainWindow::poll_catalog() {
         automaticRefreshInFlight_ = false;
         directoryMonitor_.scan_finished(true);
         directoryMonitor_.request_recheck();
+        update_clipboard_actions();
         return;
     }
     const auto automatic = automaticRefreshInFlight_;
@@ -3130,7 +3181,8 @@ void MainWindow::poll_catalog() {
             const auto current = listView_->currentIndex();
             const auto *entry = listModel_.entry_at(current);
             if (entry == nullptr || entry->id != view_state.current_id ||
-                (selectedPreview_ && !same_source(*selectedPreview_, *entry))) {
+                (selectedPreview_ && !same_source(*selectedPreview_, *entry)) ||
+                (!selectedAnimationKey_.isEmpty() && selectedAnimationKey_ != animation_source_key(*entry))) {
                 show_selection(current);
             }
             update_rename_action();
@@ -4633,7 +4685,8 @@ void MainWindow::prepare_directory_entries(
 
 void MainWindow::poll_directory_preparation() {
     if (!pendingDirectoryPreparation_) return;
-    if ((!folderMosaicController_.readers_idle() || !previewClient_.readers_idle()) &&
+    if ((!folderMosaicController_.readers_idle() || !previewClient_.readers_idle() ||
+         !gifAnimationClient_.readers_idle()) &&
         std::chrono::steady_clock::now() >= pendingDirectoryPreparation_->readers_deadline) {
         fail_directory_preparation();
         return;
@@ -4671,7 +4724,8 @@ void MainWindow::poll_directory_preparation() {
     }
     if (!pendingDirectoryPreparation_ || !pendingDirectoryPreparation_->awaiting_worker_reap ||
         !dropProbeSource_.idle()) return;
-    if (!folderMosaicController_.readers_idle() || !previewClient_.readers_idle()) return;
+    if (!folderMosaicController_.readers_idle() || !previewClient_.readers_idle() ||
+        !gifAnimationClient_.readers_idle()) return;
     auto &pending = *pendingDirectoryPreparation_;
     ++pending.index;
     if (pending.index < pending.indices.size()) {
@@ -7000,6 +7054,7 @@ void MainWindow::clear_directory_transfer_recovery_state() {
 }
 
 void MainWindow::set_rename_in_flight(const bool in_flight) {
+    if (in_flight) stop_selected_animation();
     renameInFlight_ = in_flight;
     if (!in_flight && renamePreviewSuspended_) {
         renamePreviewSuspended_ = false;
@@ -7011,6 +7066,7 @@ void MainWindow::set_rename_in_flight(const bool in_flight) {
 }
 
 void MainWindow::set_delete_in_flight(const bool in_flight) {
+    if (in_flight) stop_selected_animation();
     deleteInFlight_ = in_flight;
     setProperty("deleteInFlight", in_flight);
     update_rename_action();
@@ -7018,6 +7074,7 @@ void MainWindow::set_delete_in_flight(const bool in_flight) {
 }
 
 void MainWindow::set_transfer_in_flight(const bool in_flight) {
+    if (in_flight) stop_selected_animation();
     transferInFlight_ = in_flight;
     setProperty("fileTransferInFlight", in_flight);
     update_rename_action();
@@ -9262,6 +9319,11 @@ void MainWindow::update_selected_preview(const QModelIndex &index) {
     if (entry == nullptr || entry->id != selectedEntryId_) {
         return;
     }
+    if (selectedAnimationKey_ == animation_source_key(*entry) && !selectedAnimationImage_.isNull()) {
+        previewCanvas_->set_animation_frame(selectedAnimationImage_, selectedAnimationKey_);
+        update_page_navigation(0, 1);
+        return;
+    }
     const auto current = selectedPreview_ && same_source(*selectedPreview_, *entry) &&
                          selectedPreview_->page_index == selectedPageIndex_;
     const auto image = current ? selectedPreview_->image : QImage{};
@@ -9360,9 +9422,31 @@ void MainWindow::update_preview_support_label(const bool preview_ready) {
                                      ? warning
                                      : previewSupport_->text() + QStringLiteral(" · ") + warning);
     }
+    if (selectedAnimationFailed_) {
+        previewSupport_->setText(QCoreApplication::translate("MainWindow", "Animation unavailable"));
+        previewSupport_->show();
+    }
+}
+
+QString MainWindow::animation_source_key(const core::DirectoryEntry &entry) {
+    return QString::fromUtf8(entry.path_utf8) + QChar::Null +
+           QString::fromUtf8(entry.source_revision_utf8) + QChar::Null +
+           QString::number(entry.size_bytes) + QLatin1Char(':') +
+           QString::number(entry.modified_unix_ns);
+}
+
+void MainWindow::stop_selected_animation() {
+    selectedAnimationKey_.clear();
+    selectedAnimationImage_ = {};
+    selectedAnimationFailed_ = false;
+    selectedAnimationAnimated_ = false;
+    gifAnimationClient_.stop();
+    if (previewCanvas_ != nullptr)
+        previewCanvas_->set_animation_state(ZoomPreview::AnimationState::hidden);
 }
 
 void MainWindow::reset_selected_preview(const bool clear_image) {
+    stop_selected_animation();
     selectedPreviewExtended_ = false;
     if (cancelPreviewAttemptAction_ != nullptr) {
         cancelPreviewAttemptAction_->setEnabled(false);
@@ -9472,10 +9556,24 @@ void MainWindow::ensure_selected_preview(const bool extended_limits) {
     if (entry == nullptr || entry->kind != core::EntryKind::file) {
         return;
     }
-    if (selectedPreview_ && !same_source(*selectedPreview_, *entry)) {
+    if ((selectedPreview_ && !same_source(*selectedPreview_, *entry)) ||
+        (!selectedAnimationKey_.isEmpty() && selectedAnimationKey_ != animation_source_key(*entry))) {
         reset_selected_preview();
         update_page_navigation(0, 0);
         update_selected_preview(listView_->currentIndex());
+    }
+    if (!selectedAnimationFailed_ && !offline_cache_only() &&
+        QString::fromUtf8(entry->name_utf8).endsWith(QStringLiteral(".gif"), Qt::CaseInsensitive)) {
+        if (renameInFlight_ || deleteInFlight_ || transferInFlight_)
+            return;
+        if (selectedAnimationKey_.isEmpty()) {
+            selectedAnimationKey_ = animation_source_key(*entry);
+            gifAnimationClient_.start(QString::fromUtf8(entry->path_utf8), entry->size_bytes,
+                entry->modified_unix_ns, QString::fromUtf8(entry->source_revision_utf8),
+                selectedAnimationKey_);
+            gifAnimationClient_.set_suspended(!isVisible() || isMinimized());
+        }
+        return;
     }
     const auto edge =
         extended_limits ? preview::helper_protocol::kMaximumCanonicalEdge : selected_preview_edge();
@@ -9831,8 +9929,10 @@ void MainWindow::refresh_directory_sources() {
     }
     if (!recursiveViewActive_) directoryMonitor_.scan_started();
     session_.refresh();
+    // Publish the new scan state before callers can start another file command.
+    lastUpdate_.state = catalog::CatalogSessionState::loading;
+    update_clipboard_actions();
     if (recursiveViewActive_) {
-        lastUpdate_.state = catalog::CatalogSessionState::loading;
         lastUpdate_.truncated = false;
         lastUpdate_.error = {};
         update_rename_action();

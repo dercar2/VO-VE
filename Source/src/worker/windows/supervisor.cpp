@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -27,6 +28,25 @@ namespace {
 constexpr DWORD kSupervisorTimeoutExitCode = 124;
 constexpr DWORD kSupervisorFailureExitCode = 125;
 constexpr std::chrono::milliseconds kPollInterval{5};
+constexpr std::chrono::milliseconds kAnimationCpuLifetime{3'600'000};
+
+struct CancellationState {
+    const std::function<bool()> &predicate;
+    bool stopped{};
+    bool callback_failed{};
+
+    [[nodiscard]] bool poll() noexcept {
+        if (!stopped && predicate) {
+            try {
+                stopped = predicate();
+            } catch (...) {
+                stopped = true;
+                callback_failed = true;
+            }
+        }
+        return stopped;
+    }
+};
 
 class UniqueHandle {
   public:
@@ -148,6 +168,31 @@ void pause_after_child_creation_for_test() noexcept {}
     return true;
 }
 
+[[nodiscard]] bool animation_frame_matches_request(const SupervisorRequest &request,
+                                                   const AnimationFrame &frame,
+                                                   const std::uint64_t expected_sequence,
+                                                   std::string &detail) {
+    const auto &image = frame.image;
+    if (image.job_id != request.job.job_id || frame.sequence != expected_sequence ||
+        expected_sequence == std::numeric_limits<std::uint64_t>::max() || frame.delay_ms < 1 ||
+        frame.delay_ms > 655'350 || image.status != ResultStatus::success || image.width == 0 ||
+        image.height == 0 || image.width > request.job.limits.canonical_edge ||
+        image.height > request.job.limits.canonical_edge || image.bytes_written == 0 ||
+        image.bytes_written > request.job.limits.maximum_output_bytes) {
+        detail = "invalid animation frame metadata";
+        return false;
+    }
+    std::uint64_t actual_bytes{};
+    if (!output_size(as_handle(request.output_object), actual_bytes, detail))
+        return false;
+    if (actual_bytes > request.job.limits.maximum_output_bytes ||
+        actual_bytes != image.bytes_written) {
+        detail = "animation output size does not match its bounded metadata";
+        return false;
+    }
+    return true;
+}
+
 void append_detail(std::string &detail, const std::string &addition) {
     if (!detail.empty()) {
         detail += "; ";
@@ -177,6 +222,21 @@ void append_detail(std::string &detail, const std::string &addition) {
             .bytes_written = 0};
 }
 
+[[nodiscard]] SupervisorResult cancelled_result(const SupervisorRequest &request,
+                                                const CancellationState &cancel,
+                                                const SandboxReport &sandbox = {},
+                                                const int exit_code = 0) {
+    auto result =
+        failure(cancel.callback_failed ? SupervisorError::transport_error : SupervisorError::none,
+                cancel.callback_failed ? "worker cancellation callback threw an exception"
+                                       : "worker request cancelled",
+                sandbox, exit_code);
+    result.worker_result.job_id = request.job.job_id;
+    result.worker_result.status =
+        cancel.callback_failed ? ResultStatus::internal_error : ResultStatus::cancelled;
+    return result;
+}
+
 [[nodiscard]] bool path_is_executable_file(const std::filesystem::path &path) {
     if (path.empty()) {
         return false;
@@ -186,6 +246,11 @@ void append_detail(std::string &detail, const std::string &addition) {
 }
 
 [[nodiscard]] bool request_is_valid(const SupervisorRequest &request, std::string &detail) {
+    if ((request.job.source_format_hint == SourceFormatHint::gif_animation) !=
+        static_cast<bool>(request.animation_frame_handler)) {
+        detail = "only GIF animation jobs require and accept an animation frame handler";
+        return false;
+    }
     if (!path_is_executable_file(request.worker_executable)) {
         detail = "worker executable is missing or is not a file";
         return false;
@@ -416,6 +481,58 @@ struct PipePair {
     if (SetHandleInformation(parent, HANDLE_FLAG_INHERIT, 0) == FALSE) {
         detail = windows_error("SetHandleInformation(parent pipe)");
         return false;
+    }
+    return true;
+}
+
+// Streaming acknowledgements must remain cancellable even if the child stops reading commands.
+// Only the parent's write endpoint is overlapped; the worker still receives ordinary stdin.
+[[nodiscard]] bool create_streaming_command_pipe(PipePair &pipe, std::string &detail) {
+    static std::atomic<std::uint64_t> next_pipe{};
+    const auto name = L"\\\\.\\pipe\\vove-animation-" + std::to_wstring(GetCurrentProcessId()) +
+                      L"-" + std::to_wstring(GetTickCount64()) + L"-" +
+                      std::to_wstring(next_pipe.fetch_add(1, std::memory_order_relaxed));
+    pipe.write.reset(CreateNamedPipeW(
+        name.c_str(), PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 4'096,
+        4'096, 0, nullptr));
+    if (!pipe.write) {
+        detail = windows_error("CreateNamedPipe(worker commands)");
+        return false;
+    }
+    UniqueHandle connected{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    if (!connected) {
+        detail = windows_error("CreateEvent(worker commands)");
+        return false;
+    }
+    OVERLAPPED operation{};
+    operation.hEvent = connected.get();
+    const auto connecting = ConnectNamedPipe(pipe.write.get(), &operation);
+    const auto connect_error = connecting ? ERROR_SUCCESS : GetLastError();
+    if (!connecting && connect_error != ERROR_IO_PENDING && connect_error != ERROR_PIPE_CONNECTED) {
+        detail = windows_error("ConnectNamedPipe(worker commands)", connect_error);
+        return false;
+    }
+    SECURITY_ATTRIBUTES attributes{};
+    attributes.nLength = sizeof(attributes);
+    attributes.bInheritHandle = TRUE;
+    pipe.read.reset(CreateFileW(name.c_str(), GENERIC_READ, 0, &attributes, OPEN_EXISTING,
+                                FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!pipe.read) {
+        const auto error = GetLastError();
+        static_cast<void>(CancelIoEx(pipe.write.get(), &operation));
+        DWORD ignored{};
+        if (connect_error == ERROR_IO_PENDING)
+            static_cast<void>(GetOverlappedResult(pipe.write.get(), &operation, &ignored, TRUE));
+        detail = windows_error("CreateFile(worker command endpoint)", error);
+        return false;
+    }
+    if (connect_error == ERROR_IO_PENDING) {
+        DWORD ignored{};
+        if (GetOverlappedResult(pipe.write.get(), &operation, &ignored, TRUE) == FALSE) {
+            detail = windows_error("GetOverlappedResult(worker command connection)");
+            return false;
+        }
     }
     return true;
 }
@@ -691,11 +808,18 @@ clean_environment_block(const std::wstring_view app_container_folder) {
     return true;
 }
 
-enum class TimedIoStatus : std::uint8_t { success, timed_out, child_exited, transport_error };
+enum class TimedIoStatus : std::uint8_t {
+    success,
+    timed_out,
+    child_exited,
+    transport_error,
+    cancelled
+};
 
 struct WorkerTransport {
     HANDLE response_pipe{};
     HANDLE process{};
+    CancellationState *cancel{};
 };
 
 [[nodiscard]] TimedIoStatus read_exact_until(const WorkerTransport &transport,
@@ -704,6 +828,10 @@ struct WorkerTransport {
                                              std::string &detail) {
     std::size_t offset{};
     while (offset < output.size()) {
+        if (transport.cancel != nullptr && transport.cancel->poll()) {
+            detail = "worker request cancelled";
+            return TimedIoStatus::cancelled;
+        }
         if (std::chrono::steady_clock::now() >= deadline) {
             detail = "worker response exceeded the wall-time limit";
             return TimedIoStatus::timed_out;
@@ -802,6 +930,70 @@ struct TimedFrame {
     return true;
 }
 
+[[nodiscard]] TimedIoStatus
+write_streaming_command(const HANDLE pipe, const std::span<const std::byte> bytes,
+                        const std::chrono::steady_clock::time_point deadline,
+                        CancellationState &cancel, std::string &detail) {
+    UniqueHandle ready{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    if (!ready) {
+        detail = windows_error("CreateEvent(worker command write)");
+        return TimedIoStatus::transport_error;
+    }
+    std::size_t offset{};
+    while (offset < bytes.size()) {
+        if (cancel.poll())
+            return TimedIoStatus::cancelled;
+        if (std::chrono::steady_clock::now() >= deadline) {
+            detail = "worker command exceeded the wall-time limit";
+            return TimedIoStatus::timed_out;
+        }
+        static_cast<void>(ResetEvent(ready.get()));
+        OVERLAPPED operation{};
+        operation.hEvent = ready.get();
+        DWORD written{};
+        const auto chunk = static_cast<DWORD>(
+            std::min<std::size_t>(bytes.size() - offset, std::numeric_limits<DWORD>::max()));
+        if (WriteFile(pipe, bytes.data() + offset, chunk, &written, &operation) == FALSE) {
+            if (GetLastError() != ERROR_IO_PENDING) {
+                detail = windows_error("WriteFile(worker command)");
+                return TimedIoStatus::transport_error;
+            }
+            for (;;) {
+                const bool stopped = cancel.poll();
+                if (stopped || std::chrono::steady_clock::now() >= deadline) {
+                    static_cast<void>(CancelIoEx(pipe, &operation));
+                    // Keep the buffer, event and OVERLAPPED alive until cancellation completes.
+                    static_cast<void>(GetOverlappedResult(pipe, &operation, &written, TRUE));
+                    detail = stopped ? "worker request cancelled"
+                                     : "worker command exceeded the wall-time limit";
+                    return stopped ? TimedIoStatus::cancelled : TimedIoStatus::timed_out;
+                }
+                const auto wait =
+                    WaitForSingleObject(ready.get(), static_cast<DWORD>(kPollInterval.count()));
+                if (wait == WAIT_TIMEOUT)
+                    continue;
+                if (wait != WAIT_OBJECT_0) {
+                    static_cast<void>(CancelIoEx(pipe, &operation));
+                    static_cast<void>(GetOverlappedResult(pipe, &operation, &written, TRUE));
+                    detail = "waiting for worker command write failed";
+                    return TimedIoStatus::transport_error;
+                }
+                if (GetOverlappedResult(pipe, &operation, &written, FALSE) == FALSE) {
+                    detail = windows_error("GetOverlappedResult(worker command write)");
+                    return TimedIoStatus::transport_error;
+                }
+                break;
+            }
+        }
+        if (written == 0) {
+            detail = "worker command write made no progress";
+            return TimedIoStatus::transport_error;
+        }
+        offset += written;
+    }
+    return TimedIoStatus::success;
+}
+
 [[nodiscard]] int process_exit_code(const HANDLE process) noexcept {
     DWORD code{};
     return GetExitCodeProcess(process, &code) != FALSE ? static_cast<int>(code) : -1;
@@ -844,13 +1036,17 @@ struct ControlledProcess {
 } // namespace
 
 SupervisorResult run_worker_once(const SupervisorRequest &request) {
+    CancellationState cancel{request.cancelled};
+    if (cancel.poll())
+        return cancelled_result(request, cancel);
     std::string detail;
     if (!request_is_valid(request, detail)) {
         return failure(SupervisorError::invalid_request, std::move(detail));
     }
     const auto effective_timeout =
         std::min(request.timeout, std::chrono::milliseconds{request.job.limits.wall_timeout_ms});
-    const auto deadline = std::chrono::steady_clock::now() + effective_timeout;
+    const bool streaming = request.job.source_format_hint == SourceFormatHint::gif_animation;
+    auto deadline = std::chrono::steady_clock::now() + effective_timeout;
 
     SandboxReport sandbox;
     sandbox.network_isolated = false;
@@ -859,7 +1055,9 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
 
     PipePair commands;
     PipePair responses;
-    if (!create_pipe(commands, true, detail) || !create_pipe(responses, false, detail)) {
+    if (!(streaming ? create_streaming_command_pipe(commands, detail)
+                    : create_pipe(commands, true, detail)) ||
+        !create_pipe(responses, false, detail)) {
         return failure(SupervisorError::launch_failed, std::move(detail), sandbox);
     }
 
@@ -874,11 +1072,14 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
     }
 
     UniqueHandle job;
-    if (!configure_job(request.job.limits, effective_timeout, job, sandbox, detail)) {
+    if (!configure_job(request.job.limits, streaming ? kAnimationCpuLifetime : effective_timeout,
+                       job, sandbox, detail)) {
         return failure(SupervisorError::sandbox_unavailable, std::move(detail), sandbox);
     }
 
     auto app_container = create_app_container_identity();
+    if (cancel.poll())
+        return cancelled_result(request, cancel, sandbox);
     append_detail(sandbox.detail, app_container.detail);
     const auto use_app_container = app_container.sid.get() != nullptr;
     if (!use_app_container && request.require_minimum_sandbox) {
@@ -964,6 +1165,10 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
     const auto worker_directory = request.worker_executable.parent_path();
     const auto *current_directory = worker_directory.empty() ? nullptr : worker_directory.c_str();
     BOOL created{};
+    if (cancel.poll()) {
+        DeleteProcThreadAttributeList(startup.lpAttributeList);
+        return cancelled_result(request, cancel, sandbox);
+    }
     // SECURITY_CAPABILITIES asks Windows to construct the AppContainer token. Composing that
     // attribute with a separately restricted CreateProcessAsUser token can terminate during
     // process initialization on Windows 10, before the worker reaches its entry point.
@@ -1008,6 +1213,13 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
     }
     UniqueHandle process_handle(process.hProcess);
     UniqueHandle thread_handle(process.hThread);
+    const auto stop_cancelled = [&] {
+        static_cast<void>(TerminateJobObject(job.get(), kSupervisorFailureExitCode));
+        static_cast<void>(WaitForSingleObject(process_handle.get(), 1'000));
+        return cancelled_result(request, cancel, sandbox, process_exit_code(process_handle.get()));
+    };
+    if (cancel.poll())
+        return stop_cancelled();
 
     if (use_app_container && !child_is_app_container(process_handle.get(), detail)) {
         static_cast<void>(TerminateProcess(process_handle.get(), kSupervisorFailureExitCode));
@@ -1035,6 +1247,8 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
                         ? SandboxLevel::strict
                         : SandboxLevel::degraded;
     append_detail(sandbox.detail, "Job Object limits process count, memory, CPU time and lifetime");
+    if (streaming)
+        append_detail(sandbox.detail, "GIF CPU lifetime capped at 3600 seconds");
     append_detail(sandbox.detail,
                   use_app_container
                       ? "AppContainer with zero capabilities; network and arbitrary "
@@ -1054,6 +1268,8 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
                        process_exit_code(process_handle.get()));
     }
     append_detail(sandbox.detail, "Job Object UI restrictions active before worker start");
+    if (cancel.poll())
+        return stop_cancelled();
     if (ResumeThread(thread_handle.get()) == static_cast<DWORD>(-1)) {
         const auto code = GetLastError();
         const auto error = windows_error("ResumeThread", code);
@@ -1082,21 +1298,38 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
         return failure(SupervisorError::invalid_request, exception.what(), sandbox,
                        process_exit_code(process_handle.get()));
     }
-    if (!write_all(commands.write.get(), handshake, detail)) {
-        const auto code = GetLastError();
-        if (WaitForSingleObject(process_handle.get(), 100) != WAIT_OBJECT_0)
-            static_cast<void>(TerminateJobObject(job.get(), kSupervisorFailureExitCode));
-        static_cast<void>(WaitForSingleObject(process_handle.get(), 1'000));
-        return failure(SupervisorError::transport_error, std::move(detail), sandbox,
-                       process_exit_code(process_handle.get()), code);
-    }
-    const WorkerTransport transport{.response_pipe = responses.read.get(),
-                                    .process = process_handle.get()};
+    const WorkerTransport transport{
+        .response_pipe = responses.read.get(), .process = process_handle.get(), .cancel = &cancel};
     const ControlledProcess controlled{.job = job.get(), .process = process_handle.get()};
+    const auto write_command = [&](const std::span<const std::byte> bytes) {
+        if (cancel.poll())
+            return TimedIoStatus::cancelled;
+        if (streaming)
+            return write_streaming_command(commands.write.get(), bytes, deadline, cancel, detail);
+        return write_all(commands.write.get(), bytes, detail) ? TimedIoStatus::success
+                                                              : TimedIoStatus::transport_error;
+    };
+    const auto io_failure = [&](const TimedFrame &failed) {
+        return failed.status == TimedIoStatus::cancelled
+                   ? stop_cancelled()
+                   : timed_frame_failure(failed, controlled, sandbox);
+    };
+    auto command_status = write_command(handshake);
+    if (command_status != TimedIoStatus::success) {
+        if (!streaming && command_status != TimedIoStatus::cancelled) {
+            const auto code = GetLastError();
+            if (WaitForSingleObject(process_handle.get(), 100) != WAIT_OBJECT_0)
+                static_cast<void>(TerminateJobObject(job.get(), kSupervisorFailureExitCode));
+            static_cast<void>(WaitForSingleObject(process_handle.get(), 1'000));
+            return failure(SupervisorError::transport_error, std::move(detail), sandbox,
+                           process_exit_code(process_handle.get()), code);
+        }
+        return io_failure({.status = command_status, .bytes = {}, .detail = detail});
+    }
     auto frame = read_frame_until(transport, deadline);
     if (frame.status != TimedIoStatus::success) {
         frame.detail = "handshake: " + frame.detail;
-        return timed_frame_failure(frame, controlled, sandbox);
+        return io_failure(frame);
     }
     Handshake acknowledgement;
     DecodeError decode_error;
@@ -1122,6 +1355,8 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
         result.handshake_completed = true;
         return result;
     };
+    if (cancel.poll())
+        return after_handshake(stop_cancelled());
     HANDLE child_source{};
     HANDLE child_output{};
     HANDLE child_profile{};
@@ -1156,19 +1391,69 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
                                        process_exit_code(process_handle.get())));
     }
 
-    if (!write_all(commands.write.get(), job_frame, detail)) {
-        static_cast<void>(TerminateJobObject(job.get(), kSupervisorFailureExitCode));
-        static_cast<void>(WaitForSingleObject(process_handle.get(), 1'000));
-        return after_handshake(failure(SupervisorError::transport_error, std::move(detail), sandbox,
-                                       process_exit_code(process_handle.get())));
+    if (streaming)
+        deadline = std::chrono::steady_clock::now() + effective_timeout;
+    command_status = write_command(job_frame);
+    if (command_status != TimedIoStatus::success) {
+        return after_handshake(
+            io_failure({.status = command_status, .bytes = {}, .detail = detail}));
     }
-    commands.write.reset();
+    if (!streaming)
+        commands.write.reset();
 
-    frame = read_frame_until(transport, deadline);
-    if (frame.status != TimedIoStatus::success) {
-        frame.detail = "job result: " + frame.detail;
-        return after_handshake(timed_frame_failure(frame, controlled, sandbox));
+    std::uint64_t expected_sequence{};
+    std::uint64_t last_frame_bytes{};
+    for (;;) {
+        frame = read_frame_until(transport, deadline);
+        if (frame.status != TimedIoStatus::success) {
+            frame.detail = "job result: " + frame.detail;
+            return after_handshake(io_failure(frame));
+        }
+        DecodedFrame envelope;
+        if (!decode_frame(frame.bytes, envelope, decode_error)) {
+            return after_handshake(
+                io_failure({.status = TimedIoStatus::transport_error,
+                            .bytes = {},
+                            .detail = "invalid worker frame: " + decode_error.message}));
+        }
+        if (!streaming || envelope.header.kind != MessageKind::animation_frame)
+            break;
+
+        AnimationFrame animation;
+        if (!decode_animation_frame(frame.bytes, animation, decode_error) ||
+            !animation_frame_matches_request(request, animation, expected_sequence, detail)) {
+            return after_handshake(
+                io_failure({.status = TimedIoStatus::transport_error,
+                            .bytes = {},
+                            .detail = "invalid animation frame metadata or output slot"}));
+        }
+        if (cancel.poll())
+            return after_handshake(stop_cancelled());
+        bool proceed{};
+        try {
+            proceed = request.animation_frame_handler(animation);
+        } catch (...) {
+            return after_handshake(
+                io_failure({.status = TimedIoStatus::transport_error,
+                            .bytes = {},
+                            .detail = "animation frame callback threw an exception"}));
+        }
+        if (cancel.poll() || !proceed)
+            return after_handshake(stop_cancelled());
+        last_frame_bytes = animation.image.bytes_written;
+        ++expected_sequence;
+        // Callback pacing is outside the decoder deadline; acknowledgement releases the slot.
+        deadline = std::chrono::steady_clock::now() + effective_timeout;
+        const auto advance =
+            encode_animation_advance({.job_id = request.job.job_id, .proceed = true});
+        command_status = write_command(advance);
+        if (command_status != TimedIoStatus::success) {
+            return after_handshake(
+                io_failure({.status = command_status, .bytes = {}, .detail = detail}));
+        }
     }
+    if (streaming)
+        commands.write.reset();
     WorkerResult worker_result;
     if (!decode_worker_result(frame.bytes, worker_result, decode_error)) {
         static_cast<void>(TerminateJobObject(job.get(), kSupervisorFailureExitCode));
@@ -1184,24 +1469,37 @@ SupervisorResult run_worker_once(const SupervisorRequest &request) {
                                        "worker returned a different job id", sandbox,
                                        process_exit_code(process_handle.get())));
     }
-
-    const auto now = std::chrono::steady_clock::now();
-    if (now >= deadline) {
-        static_cast<void>(TerminateJobObject(job.get(), kSupervisorTimeoutExitCode));
-        static_cast<void>(WaitForSingleObject(process_handle.get(), 1'000));
-        return after_handshake(
-            failure(SupervisorError::timed_out,
-                    "worker process exceeded the wall-time limit after its result", sandbox,
-                    process_exit_code(process_handle.get())));
+    if (streaming && worker_result.status == ResultStatus::success &&
+        (expected_sequence == 0 ||
+         (worker_result.bytes_written != 0 && worker_result.bytes_written != last_frame_bytes))) {
+        return after_handshake(io_failure(
+            {.status = TimedIoStatus::transport_error,
+             .bytes = {},
+             .detail = "animation terminal result does not match the last output slot"}));
     }
-    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
-    const auto wait_ms = static_cast<DWORD>(std::max<std::int64_t>(1, remaining.count()));
-    if (WaitForSingleObject(process_handle.get(), wait_ms) != WAIT_OBJECT_0) {
-        static_cast<void>(TerminateJobObject(job.get(), kSupervisorTimeoutExitCode));
-        static_cast<void>(WaitForSingleObject(process_handle.get(), 1'000));
-        return after_handshake(failure(SupervisorError::timed_out,
-                                       "worker did not exit before the wall-time limit", sandbox,
-                                       process_exit_code(process_handle.get())));
+
+    for (;;) {
+        if (cancel.poll())
+            return after_handshake(stop_cancelled());
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            return after_handshake(
+                io_failure({.status = TimedIoStatus::timed_out,
+                            .bytes = {},
+                            .detail = "worker did not exit before the wall-time limit"}));
+        }
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        const auto wait_ms = static_cast<DWORD>(std::max<std::int64_t>(
+            1, cancel.predicate ? std::min(remaining, kPollInterval).count() : remaining.count()));
+        const auto waited = WaitForSingleObject(process_handle.get(), wait_ms);
+        if (waited == WAIT_OBJECT_0)
+            break;
+        if (waited != WAIT_TIMEOUT) {
+            return after_handshake(io_failure({.status = TimedIoStatus::transport_error,
+                                               .bytes = {},
+                                               .detail = "waiting for worker exit failed"}));
+        }
     }
     const auto exit = process_exit_code(process_handle.get());
     if (exit != 0) {

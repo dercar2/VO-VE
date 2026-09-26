@@ -122,6 +122,12 @@
       "reason": "Sandboxed JPEG decoding without Windows metadata-handler stalls"
     },
     {
+      "path": "imageformats/qgif.dll",
+      "source": "{qt}/plugins/imageformats/qgif.dll",
+      "owner": "Qt runtime",
+      "reason": "Bounded GIF animation decoding in the isolated raster worker"
+    },
+    {
       "path": "translations/vove_ru.qm",
       "source": "{build}/src/ui/qt/translations/vove_ru.qm",
       "owner": "VO-VE localization",

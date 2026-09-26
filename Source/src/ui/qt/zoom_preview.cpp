@@ -7,6 +7,8 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QStyle>
+#include <QToolButton>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -17,6 +19,7 @@ namespace {
 constexpr qreal kMinimumZoom = 1.0;
 constexpr qreal kMaximumZoom = 16.0;
 constexpr qreal kZoomStep = 1.2;
+constexpr int kAnimationControlSize = 24;
 
 bool zoom_key(const QKeyEvent *event) {
     const auto modifiers = event->modifiers() & ~(Qt::ShiftModifier | Qt::KeypadModifier);
@@ -26,7 +29,8 @@ bool zoom_key(const QKeyEvent *event) {
 }
 } // namespace
 
-ZoomPreview::ZoomPreview(QWidget *parent) : QLabel(parent), indicator_(new QLabel(this)) {
+ZoomPreview::ZoomPreview(QWidget *parent)
+    : QLabel(parent), indicator_(new QLabel(this)), animationControl_(new QToolButton(this)) {
     setAlignment(Qt::AlignCenter);
     setFocusPolicy(Qt::StrongFocus);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
@@ -38,6 +42,23 @@ ZoomPreview::ZoomPreview(QWidget *parent) : QLabel(parent), indicator_(new QLabe
     indicator_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     indicator_->setContentsMargins(4, 2, 4, 2);
     indicator_->setAutoFillBackground(true);
+    animationControl_->setObjectName(QStringLiteral("previewAnimationControl"));
+    animationControl_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    animationControl_->setIconSize(QSize(16, 16));
+    animationControl_->setFixedSize(kAnimationControlSize, kAnimationControlSize);
+    animationControl_->setAutoRaise(true);
+    animationControl_->setFocusPolicy(Qt::NoFocus);
+    animationControl_->setCursor(Qt::ArrowCursor);
+    animationControl_->setLayoutDirection(Qt::LeftToRight);
+    connect(animationControl_, &QToolButton::clicked, this, [this] {
+        if (animationState_ != AnimationState::hidden) {
+            const auto toggle = animation_toggle;
+            if (toggle) {
+                toggle();
+            }
+        }
+    });
+    refresh_animation_control();
     auto small_font = font();
     if (small_font.pointSizeF() > 0) {
         small_font.setPointSizeF(small_font.pointSizeF() * 0.9);
@@ -52,6 +73,7 @@ ZoomPreview::ZoomPreview(const QString &text, QWidget *parent) : ZoomPreview(par
 }
 
 void ZoomPreview::setPixmap(const QPixmap &image) {
+    set_animation_state(AnimationState::hidden);
     imageKey_ = 0;
     sourceKey_.clear();
     if (!image.isNull() && image.cacheKey() == source_.cacheKey()) {
@@ -63,6 +85,19 @@ void ZoomPreview::setPixmap(const QPixmap &image) {
 }
 
 void ZoomPreview::set_preview(const QImage &image, const QString &stable_key) {
+    set_animation_state(AnimationState::hidden);
+    update_preview(image, stable_key, false);
+}
+
+void ZoomPreview::set_animation_frame(QImage image, const QString &stable_key) {
+    if (image.isNull()) {
+        set_animation_state(AnimationState::hidden);
+    }
+    update_preview(image, stable_key, true);
+}
+
+void ZoomPreview::update_preview(const QImage &image, const QString &stable_key,
+                                 const bool preserve_panning) {
     const auto same_source = !image.isNull() && !source_.isNull() && sourceKey_ == stable_key &&
                              (!stable_key.isEmpty() || imageKey_ == image.cacheKey());
     if (same_source && imageKey_ == image.cacheKey()) {
@@ -77,7 +112,9 @@ void ZoomPreview::set_preview(const QImage &image, const QString &stable_key) {
         reset_zoom();
         return;
     }
-    stop_pan();
+    if (!preserve_panning) {
+        stop_pan();
+    }
     const auto size = fitted_size();
     if (!old_size.isEmpty()) {
         pan_.setX(pan_.x() * size.width() / old_size.width());
@@ -90,6 +127,7 @@ void ZoomPreview::set_preview(const QImage &image, const QString &stable_key) {
 }
 
 void ZoomPreview::setText(const QString &text) {
+    set_animation_state(AnimationState::hidden);
     imageKey_ = 0;
     sourceKey_.clear();
     source_ = {};
@@ -98,6 +136,7 @@ void ZoomPreview::setText(const QString &text) {
 }
 
 void ZoomPreview::setMovie(QMovie *movie) {
+    set_animation_state(AnimationState::hidden);
     imageKey_ = 0;
     sourceKey_.clear();
     source_ = {};
@@ -106,11 +145,52 @@ void ZoomPreview::setMovie(QMovie *movie) {
 }
 
 void ZoomPreview::clear() {
+    set_animation_state(AnimationState::hidden);
     imageKey_ = 0;
     sourceKey_.clear();
     source_ = {};
     QLabel::clear();
     reset_zoom();
+}
+
+void ZoomPreview::set_animation_state(const AnimationState state) {
+    if (animationState_ == state) {
+        return;
+    }
+    animationState_ = state;
+    refresh_animation_control();
+    refresh_indicator();
+}
+
+void ZoomPreview::refresh_animation_control() {
+    auto icon = QStyle::SP_MediaPlay;
+    QString command;
+    switch (animationState_) {
+    case AnimationState::playing:
+        icon = QStyle::SP_MediaPause;
+        command = QObject::tr("Pause animation");
+        break;
+    case AnimationState::paused:
+        command = QObject::tr("Play animation");
+        break;
+    case AnimationState::finished:
+        icon = QStyle::SP_BrowserReload;
+        command = QObject::tr("Replay animation");
+        break;
+    case AnimationState::hidden:
+        break;
+    }
+    animationControl_->setEnabled(animationState_ != AnimationState::hidden);
+    auto glyph = style()->standardIcon(icon, nullptr, animationControl_)
+                     .pixmap(animationControl_->iconSize(), devicePixelRatioF());
+    {
+        QPainter painter(&glyph);
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(glyph.rect(), animationControl_->palette().color(QPalette::ButtonText));
+    }
+    animationControl_->setIcon(QIcon(glyph));
+    animationControl_->setToolTip(command);
+    animationControl_->setAccessibleName(command);
 }
 
 void ZoomPreview::set_indicator_font(const QFont &font) {
@@ -193,6 +273,7 @@ void ZoomPreview::refresh_indicator() {
     const auto visible = !source_.isNull() && !area.isEmpty();
     indicator_->setVisible(visible);
     if (!visible) {
+        animationControl_->hide();
         return;
     }
     indicator_->setText(QString::number(qRound(zoom_ * 100)) + QLatin1Char('%'));
@@ -202,6 +283,15 @@ void ZoomPreview::refresh_indicator() {
     indicator_->setGeometry(area.right() + 1 - inset_x - size.width(), area.top() + inset_y,
                             size.width(), size.height());
     indicator_->raise();
+    const auto control_x = indicator_->x() - 4 - kAnimationControlSize;
+    const auto control_y = area.top() + 4;
+    const QRect control_rect(control_x, control_y, kAnimationControlSize, kAnimationControlSize);
+    const auto show_control = animationState_ != AnimationState::hidden && area.contains(control_rect);
+    animationControl_->setVisible(show_control);
+    if (show_control) {
+        animationControl_->setGeometry(control_rect);
+        animationControl_->raise();
+    }
 }
 
 void ZoomPreview::refresh_cursor() {
@@ -238,6 +328,9 @@ bool ZoomPreview::event(QEvent *event) {
         stop_pan();
     }
     const auto result = QLabel::event(event);
+    if (event->type() == QEvent::DevicePixelRatioChange) {
+        refresh_animation_control();
+    }
     if (event->type() == QEvent::ContentsRectChange ||
         event->type() == QEvent::DevicePixelRatioChange) {
         clamp_pan();
@@ -271,6 +364,10 @@ void ZoomPreview::resizeEvent(QResizeEvent *event) {
 
 void ZoomPreview::changeEvent(QEvent *event) {
     QLabel::changeEvent(event);
+    if (event->type() == QEvent::LanguageChange || event->type() == QEvent::StyleChange ||
+        event->type() == QEvent::PaletteChange) {
+        refresh_animation_control();
+    }
     if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange ||
         event->type() == QEvent::PaletteChange || event->type() == QEvent::LayoutDirectionChange) {
         refresh_indicator();

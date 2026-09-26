@@ -1,4 +1,5 @@
 #include "service.hpp"
+#include "gif_stream.hpp"
 
 #include "vove/cache/sqlite_artifact_index.hpp"
 #include "vove/preview/worker_thumbnail_renderer.hpp"
@@ -287,8 +288,22 @@ int run(int argc, char *argv[]) {
     const QCommandLineOption ghostscript_option(QStringLiteral("ghostscript"),
                                                 QStringLiteral("Ghostscript executable."),
                                                 QStringLiteral("path"));
+    const QCommandLineOption gif_stream_option(QStringLiteral("gif-stream"),
+                                               QStringLiteral("Stream a selected GIF snapshot."),
+                                               QStringLiteral("path"));
+    const QCommandLineOption source_size_option(QStringLiteral("source-size"),
+                                                QStringLiteral("Expected source byte size."),
+                                                QStringLiteral("bytes"));
+    const QCommandLineOption source_modified_option(QStringLiteral("source-modified"),
+                                                    QStringLiteral("Expected source timestamp."),
+                                                    QStringLiteral("nanoseconds"));
+    const QCommandLineOption source_revision_option(QStringLiteral("source-revision"),
+                                                    QStringLiteral("Expected source revision."),
+                                                    QStringLiteral("revision"));
     parser.addOptions({server_option, cache_option, cache_limit_option, build_option, parent_option,
-                       parent_created_option, cmyk_profile_option, ghostscript_option});
+                       parent_created_option, cmyk_profile_option, ghostscript_option,
+                       gif_stream_option, source_size_option, source_modified_option,
+                       source_revision_option});
 #ifdef _WIN32
     const QCommandLineOption prepare_runtime_option(
         QStringLiteral("prepare-worker-runtime"),
@@ -318,8 +333,7 @@ int run(int argc, char *argv[]) {
 
     const auto auth_token = qEnvironmentVariable("VOVE_PREVIEW_AUTH_TOKEN");
     qunsetenv("VOVE_PREVIEW_AUTH_TOKEN");
-    if (!parser.isSet(server_option) || auth_token.isEmpty() || !parser.isSet(cache_option) ||
-        !parser.isSet(build_option) || !parser.isSet(parent_option)) {
+    if (!parser.isSet(parent_option)) {
         std::cerr << "required helper arguments are missing\n";
         return 2;
     }
@@ -335,6 +349,26 @@ int run(int argc, char *argv[]) {
     if (!parent_id_ok || !parent_created_ok || !parent_guard.valid()) {
         std::cerr << "preview helper owner is unavailable\n";
         return 8;
+    }
+#ifdef _WIN32
+    InstallationShutdownGuard installation_shutdown_guard;
+#endif
+    if (parser.isSet(gif_stream_option)) {
+        bool size_ok{};
+        bool modified_ok{};
+        const auto size = parser.value(source_size_option).toULongLong(&size_ok);
+        const auto modified = parser.value(source_modified_option).toLongLong(&modified_ok);
+        if (!size_ok || !modified_ok || !parser.isSet(source_revision_option)) {
+            std::cerr << "required GIF source arguments are missing or invalid\n";
+            return 2;
+        }
+        return vove::preview::helper::run_gif_stream(
+            parser.value(gif_stream_option), size, modified, parser.value(source_revision_option));
+    }
+    if (!parser.isSet(server_option) || auth_token.isEmpty() || !parser.isSet(cache_option) ||
+        !parser.isSet(build_option)) {
+        std::cerr << "required helper arguments are missing\n";
+        return 2;
     }
 
     const auto cache_root = native_path(parser.value(cache_option));
@@ -400,7 +434,6 @@ int run(int argc, char *argv[]) {
     renderer_options.svg_expected_build_id = "vove-stage10d-resvg-1";
 #endif
 #ifdef _WIN32
-    InstallationShutdownGuard installation_shutdown_guard;
     // Portable copies and updates may replace file ACLs. Check once per helper, never per image.
     const auto prepared = vove::worker::prepare_windows_worker_runtime(
         native_path(QCoreApplication::applicationDirPath()));

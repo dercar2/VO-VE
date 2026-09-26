@@ -146,6 +146,8 @@ add_executable(vove-ui-qt WIN32
     folder_mosaic_controller.hpp
     preview_client.cpp
     preview_client.hpp
+    gif_animation_client.cpp
+    gif_animation_client.hpp
     trash_dialog.cpp
     trash_dialog.hpp
     translation_manager.cpp
@@ -160,6 +162,43 @@ add_executable(vove-ui-qt WIN32
 )
 
 if(BUILD_TESTING AND VOVE_BUILD_TESTS)
+    add_executable(vove-gif-animation-transport-tests
+        ${PROJECT_SOURCE_DIR}/tests/ui/gif_animation_client_transport_test.cpp
+        gif_animation_client.cpp)
+    target_include_directories(vove-gif-animation-transport-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(vove-gif-animation-transport-tests PRIVATE
+        vove::worker_protocol vove::qoi_codec Qt6::Gui)
+    vove_copy_cxx_runtime(vove-gif-animation-transport-tests)
+    vove_enable_warnings(vove-gif-animation-transport-tests)
+    add_test(NAME vove-gif-animation-transport-tests COMMAND vove-gif-animation-transport-tests)
+    vove_set_qt_test_runtime(vove-gif-animation-transport-tests)
+    set_tests_properties(vove-gif-animation-transport-tests PROPERTIES TIMEOUT 60)
+    add_executable(vove-gif-animation-client-tests
+        ${PROJECT_SOURCE_DIR}/tests/ui/gif_animation_client_test.cpp gif_animation_client.cpp)
+    target_include_directories(vove-gif-animation-client-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(vove-gif-animation-client-tests PRIVATE
+        vove::worker_protocol vove::qoi_codec vove::platform Qt6::Gui)
+    target_compile_definitions(vove-gif-animation-client-tests PRIVATE
+        "VOVE_TEST_GIF_HELPER=\"$<TARGET_FILE:vove-preview-helper>\"")
+    add_dependencies(vove-gif-animation-client-tests vove-preview-helper)
+    vove_copy_cxx_runtime(vove-gif-animation-client-tests)
+    vove_enable_warnings(vove-gif-animation-client-tests)
+    add_test(NAME vove-gif-animation-client-tests COMMAND vove-gif-animation-client-tests)
+    vove_set_qt_test_runtime(vove-gif-animation-client-tests)
+    vove_set_qt_image_plugins(vove-gif-animation-client-tests)
+    set_tests_properties(vove-gif-animation-client-tests PROPERTIES TIMEOUT 90)
+    if(WIN32)
+        add_test(NAME vove-gif-runtime-access-tests
+            COMMAND $<TARGET_FILE:vove-preview-helper> --prepare-worker-runtime)
+        add_test(NAME vove-gif-ui-runtime-access-tests
+            COMMAND $<TARGET_FILE_DIR:vove-ui-qt>/vove-preview-helper.exe --prepare-worker-runtime)
+        set_tests_properties(vove-gif-runtime-access-tests vove-gif-ui-runtime-access-tests
+            PROPERTIES FIXTURES_SETUP vove-gif-runtime-access TIMEOUT 15
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
+        set_tests_properties(vove-gif-animation-client-tests PROPERTIES
+            FIXTURES_REQUIRED vove-gif-runtime-access)
+    endif()
     add_executable(vove-zoom-preview-tests
         ${PROJECT_SOURCE_DIR}/tests/ui/zoom_preview_test.cpp
         zoom_preview.cpp)
@@ -315,6 +354,9 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:Qt6::QJpegPlugin>
             $<TARGET_FILE_DIR:vove-ui-qt>/imageformats/$<TARGET_FILE_NAME:Qt6::QJpegPlugin>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:Qt6::QGifPlugin>
+            $<TARGET_FILE_DIR:vove-ui-qt>/imageformats/$<TARGET_FILE_NAME:Qt6::QGifPlugin>
         COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:vove-ui-qt>/tls
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:Qt6::QSchannelBackendPlugin>
@@ -375,6 +417,8 @@ target_link_libraries(vove-ui-qt PRIVATE
     vove::platform
     vove::preview
     vove::preview_protocol
+    vove::worker_protocol
+    vove::qoi_codec
     vove::search
     vove-update-qt
     Qt6::Network
@@ -1134,6 +1178,8 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     endif()
 
     add_executable(vove-qt-shell-tests
+        gif_animation_client.cpp
+        gif_animation_client.hpp
         components_panel.cpp
         components_panel.hpp
         about_dialog.cpp
@@ -1268,6 +1314,8 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     vove_copy_cxx_runtime(vove-qt-shell-tests)
     target_include_directories(vove-qt-shell-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(vove-qt-shell-tests PRIVATE
+        vove::worker_protocol
+        vove::qoi_codec
         vove::catalog
         vove::core
         vove::color
@@ -1420,6 +1468,15 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     vove_copy_cxx_runtime(vove-preview-pane-tests)
     vove_enable_warnings(vove-preview-pane-tests)
     add_test(NAME vove-preview-pane-tests COMMAND vove-preview-pane-tests)
+    add_test(NAME vove-gif-animation-ui-tests COMMAND vove-preview-pane-tests)
+    set_tests_properties(vove-gif-animation-ui-tests PROPERTIES TIMEOUT 90
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_TEST_GIF_UI_ONLY=1")
+    if(WIN32)
+        set_tests_properties(vove-gif-animation-ui-tests PROPERTIES
+            FIXTURES_REQUIRED vove-gif-runtime-access)
+        set_tests_properties(vove-gif-animation-ui-tests PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
+    endif()
     set_tests_properties(vove-preview-pane-tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     if(WIN32)
         set_tests_properties(vove-preview-pane-tests PROPERTIES ENVIRONMENT_MODIFICATION

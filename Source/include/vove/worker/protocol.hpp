@@ -15,7 +15,7 @@ using CapabilitySet = std::uint64_t;
 
 inline constexpr std::uint32_t kProtocolMagic = 0x45564F56U;
 inline constexpr std::uint16_t kProtocolMajor = 1;
-inline constexpr std::uint16_t kProtocolMinor = 18;
+inline constexpr std::uint16_t kProtocolMinor = 19;
 inline constexpr std::size_t kProtocolHeaderBytes = 24;
 inline constexpr std::size_t kMaximumPayloadBytes = std::size_t{2} * 1024U * 1024U;
 inline constexpr std::size_t kMaximumFrameBytes = kProtocolHeaderBytes + kMaximumPayloadBytes;
@@ -37,6 +37,8 @@ enum class MessageKind : std::uint16_t { // NOLINT(performance-enum-size)
     worker_job = 3,
     worker_result = 4,
     cancel_generation = 5,
+    animation_frame = 6,
+    animation_advance = 7,
 };
 
 enum class Capability : std::uint64_t { // NOLINT(performance-enum-size)
@@ -101,6 +103,7 @@ enum class SourceFormatHint : std::uint8_t {
     idml = 5,
     // XCF is decoded by the embedded KImageFormats reader; no external editor is launched.
     xcf = 6,
+    gif_animation = 7,
 };
 
 enum class DecodeErrorCode : std::uint8_t {
@@ -184,6 +187,26 @@ struct WorkerResult {
 struct CancelGeneration {
     RequestGeneration generation{};
 };
+
+// One bounded output slot is consumed before the supervisor acknowledges the next frame.
+struct AnimationFrame {
+    WorkerResult image;
+    std::uint32_t delay_ms{};
+    std::uint64_t sequence{};
+    bool animated{};
+};
+
+struct AnimationAdvance {
+    JobId job_id{};
+    bool proceed{true};
+};
+
+[[nodiscard]] std::vector<std::byte> encode_animation_frame(const AnimationFrame &frame);
+[[nodiscard]] bool decode_animation_frame(std::span<const std::byte> bytes,
+                                          AnimationFrame &frame, DecodeError &error);
+[[nodiscard]] std::vector<std::byte> encode_animation_advance(const AnimationAdvance &advance);
+[[nodiscard]] bool decode_animation_advance(std::span<const std::byte> bytes,
+                                            AnimationAdvance &advance, DecodeError &error);
 
 [[nodiscard]] bool decode_frame(std::span<const std::byte> bytes, DecodedFrame &frame,
                                 DecodeError &error);

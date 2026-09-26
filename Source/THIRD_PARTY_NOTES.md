@@ -12,6 +12,10 @@ Windows Qt 6.10.3 is distributed under its GPLv3 open-source option; its third-p
 LLVM-MinGW runtime and Rust components retain the licenses identified in the release supplements.
 Distribution-provided Linux shared libraries are not bundled into the DEB.
 
+GIF animation uses the existing Qt image handler inside the isolated raster worker.
+Windows includes `imageformats/qgif.dll` from the same Qt build; this is covered by the
+Qt licensing terms and corresponding Qt source, not a separate animation library.
+
 ## pugixml 1.16
 
 - Purpose: parse bounded InDesign XMP metadata to extract a saved document preview.

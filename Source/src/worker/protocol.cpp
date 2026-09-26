@@ -117,6 +117,8 @@ void fail(DecodeError &error, const DecodeErrorCode code, std::string message) {
     case MessageKind::worker_job:
     case MessageKind::worker_result:
     case MessageKind::cancel_generation:
+    case MessageKind::animation_frame:
+    case MessageKind::animation_advance:
         return true;
     }
     return false;
@@ -222,7 +224,7 @@ void fail(DecodeError &error, const DecodeErrorCode code, std::string message) {
             (job.profile_token != job.source_token && job.profile_token != job.output_token)) &&
            job.page_index < kMaximumPageCount &&
            static_cast<std::uint8_t>(job.source_format_hint) <=
-               static_cast<std::uint8_t>(SourceFormatHint::xcf) &&
+               static_cast<std::uint8_t>(SourceFormatHint::gif_animation) &&
            job.password_utf8.size() <= kMaximumPasswordBytes &&
            job.password_utf8.find('\0') == std::string::npos && valid_utf8(job.password_utf8) &&
            valid_limits(job.limits);
@@ -519,6 +521,70 @@ bool decode_worker_result(const std::span<const std::byte> bytes, WorkerResult &
         return false;
     }
     result = std::move(decoded);
+    return true;
+}
+
+std::vector<std::byte> encode_animation_frame(const AnimationFrame &frame) {
+    if (frame.image.status != ResultStatus::success || frame.delay_ms == 0 ||
+        frame.delay_ms > 655'350 || frame.image.width == 0 || frame.image.height == 0 ||
+        frame.image.bytes_written == 0) {
+        throw std::invalid_argument("invalid animation frame");
+    }
+    std::vector<std::byte> payload;
+    append_integer(payload, frame.delay_ms);
+    append_integer(payload, frame.sequence);
+    append_integer(payload, static_cast<std::uint8_t>(frame.animated));
+    const auto result = encode_worker_result(frame.image);
+    payload.insert(payload.end(), result.begin(), result.end());
+    return make_frame(MessageKind::animation_frame, frame.image.job_id, payload);
+}
+
+bool decode_animation_frame(const std::span<const std::byte> bytes, AnimationFrame &result,
+                            DecodeError &error) {
+    DecodedFrame frame;
+    if (!decode_typed_frame(bytes, MessageKind::animation_frame, frame, error))
+        return false;
+    Cursor cursor(frame.payload);
+    AnimationFrame decoded;
+    std::uint8_t animated{};
+    if (!cursor.read(decoded.delay_ms) || !cursor.read(decoded.sequence) ||
+        !cursor.read(animated)) {
+        fail(error, DecodeErrorCode::truncated, "animation metadata is truncated");
+        return false;
+    }
+    if (animated > 1 || decoded.delay_ms == 0 || decoded.delay_ms > 655'350 ||
+        !decode_worker_result(std::span<const std::byte>{frame.payload}.subspan(13),
+                              decoded.image, error) ||
+        decoded.image.job_id != frame.header.job_id ||
+        decoded.image.status != ResultStatus::success || decoded.image.width == 0 ||
+        decoded.image.height == 0 || decoded.image.bytes_written == 0) {
+        if (!error)
+            fail(error, DecodeErrorCode::invalid_value, "invalid animation metadata");
+        return false;
+    }
+    decoded.animated = animated != 0;
+    result = std::move(decoded);
+    return true;
+}
+
+std::vector<std::byte> encode_animation_advance(const AnimationAdvance &advance) {
+    if (advance.job_id == 0)
+        throw std::invalid_argument("animation acknowledgement needs a job id");
+    const std::array payload{static_cast<std::byte>(advance.proceed ? 1 : 0)};
+    return make_frame(MessageKind::animation_advance, advance.job_id, payload);
+}
+
+bool decode_animation_advance(const std::span<const std::byte> bytes, AnimationAdvance &advance,
+                              DecodeError &error) {
+    DecodedFrame frame;
+    if (!decode_typed_frame(bytes, MessageKind::animation_advance, frame, error))
+        return false;
+    if (frame.header.job_id == 0 || frame.payload.size() != 1 ||
+        std::to_integer<unsigned>(frame.payload[0]) > 1) {
+        fail(error, DecodeErrorCode::invalid_value, "invalid animation acknowledgement");
+        return false;
+    }
+    advance = {frame.header.job_id, frame.payload[0] != std::byte{0}};
     return true;
 }
 

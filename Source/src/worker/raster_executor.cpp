@@ -1,6 +1,7 @@
 #include "raster_executor.hpp"
 
 #include "vove/cache/qoi_codec.hpp"
+#include "vove/handlers/raster/gif_animation_decoder.hpp"
 #include "vove/color/color_transform.h"
 #include "vove/handlers/raster/heic_decoder.hpp"
 #include "vove/handlers/raster/jpegxl_decoder.hpp"
@@ -782,6 +783,68 @@ struct EncodedThumbnail {
 }
 
 } // namespace
+
+WorkerResult execute_gif_animation_native(const NativeJobIo io, const WorkerJob &job,
+                                          const AnimationEmitter &publish_frame) {
+    constexpr auto maximum_input = 64ULL * 1024ULL * 1024ULL;
+    auto source = handlers::raster::make_native_source(io.source,
+        std::min<std::uint64_t>(maximum_input, job.limits.maximum_input_bytes));
+    if (!source.ok())
+        return failure(job, source_error_status(source.error.code), "animation source unavailable");
+    handlers::raster::GifAnimationDecoder decoder(*source.source,
+        std::min(2048U, job.limits.canonical_edge));
+    source.source.reset();
+    // Animation is an immutable, bounded encoded snapshot; do not lock its original file.
+#ifdef _WIN32
+    CloseHandle(io.source);
+#else
+    ::close(io.source);
+#endif
+    const auto clear_output = [&] {
+#ifdef _WIN32
+        LARGE_INTEGER beginning{};
+        return SetFilePointerEx(io.output, beginning, nullptr, FILE_BEGIN) != FALSE &&
+               SetEndOfFile(io.output) != FALSE;
+#else
+        return ::lseek(io.output, 0, SEEK_SET) == 0 && ::ftruncate(io.output, 0) == 0;
+#endif
+    };
+    WorkerResult last;
+    last.job_id = job.job_id;
+    for (std::uint64_t sequence = 0;; ++sequence) {
+        auto frame = decoder.next();
+        if (frame.error_code != handlers::raster::QtRasterDecodeErrorCode::none) {
+            static_cast<void>(clear_output());
+            return failure(job, decode_error_status(frame.error_code), frame.detail);
+        }
+        if (frame.finished && frame.image.isNull())
+            return last;
+        if (!clear_output())
+            return failure(job, ResultStatus::internal_error, "animation output reset failed");
+        const auto &image = frame.image;
+        last = encode_success(io.output, job, {
+            .rgba = {reinterpret_cast<const std::byte *>(image.constBits()),
+                     static_cast<std::size_t>(image.sizeInBytes())},
+            .width = static_cast<std::uint32_t>(image.width()),
+            .height = static_cast<std::uint32_t>(image.height()),
+            .stride = static_cast<std::size_t>(image.bytesPerLine()),
+            .page_count = 1,
+            .color_model = ColorModel::rgb,
+            .color_profile = "sRGB (assumed)",
+            .source_profile_fingerprint = {},
+        });
+        if (last.status != ResultStatus::success) {
+            static_cast<void>(clear_output());
+            return last;
+        }
+        if (!publish_frame({last, frame.delay_ms, sequence, frame.animated})) {
+            static_cast<void>(clear_output());
+            return failure(job, ResultStatus::cancelled, "animation stopped");
+        }
+        if (frame.finished)
+            return last;
+    }
+}
 
 WorkerResult execute_raster_job_native(const NativeJobIo io, const WorkerJob &job) {
 #ifdef _WIN32

@@ -7,6 +7,7 @@
 #include "external_open_coordinator.hpp"
 #include "folder_mosaic_controller.hpp"
 #include "global_search_client.hpp"
+#include "gif_animation_client.hpp"
 #include "preview_client.hpp"
 #include "object_transfer_queue.hpp"
 #include "trash_dialog.hpp"
@@ -448,6 +449,8 @@ class MainWindow final : public QMainWindow {
     void update_status(const catalog::CatalogSessionUpdate &update);
     void update_selected_preview(const QModelIndex &index);
     void reset_selected_preview(bool clear_image = true);
+    void stop_selected_animation();
+    [[nodiscard]] static QString animation_source_key(const core::DirectoryEntry &entry);
     void ensure_selected_preview(bool extended_limits = false);
     [[nodiscard]] bool can_force_preview(const core::DirectoryEntry &entry) const;
     void force_preview(qulonglong entry_id);
@@ -479,6 +482,7 @@ class MainWindow final : public QMainWindow {
     DirectoryListModel listModel_;
     DirectoryItemDelegate delegate_;
     PreviewClient previewClient_;
+    GifAnimationClient gifAnimationClient_;
     FolderMosaicController folderMosaicController_;
     GlobalSearchClient globalSearchClient_;
     platform::DirectoryService source_;
@@ -603,6 +607,10 @@ class MainWindow final : public QMainWindow {
     std::uint32_t selectedPageIndex_{};
     std::uint32_t selectedPageCount_{};
     std::optional<PreviewReply> selectedPreview_;
+    QString selectedAnimationKey_;
+    QImage selectedAnimationImage_;
+    bool selectedAnimationFailed_{};
+    bool selectedAnimationAnimated_{};
     preview::helper_protocol::RequestId selectedPreviewRequest_{};
     std::uint16_t selectedPreviewPendingEdge_{};
     bool selectedPreviewExtended_{};

@@ -74,6 +74,7 @@ int main(int argc, char **argv) try {
         vove::worker::capability_bit(vove::worker::Capability::color_management) |
         vove::worker::capability_bit(vove::worker::Capability::raster_handler);
     options.executor = vove::worker::execute_raster_job_native;
+    options.animation_executor = vove::worker::execute_gif_animation_native;
 #ifndef _WIN32
     options.receive_posix_objects = true;
 #endif

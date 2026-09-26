@@ -455,6 +455,7 @@ preview</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message><source>Animation unavailable</source><translation>动画不可用</translation></message>
     <message>
         <source>Invalid Trash operation request</source>
         <translation>回收站操作请求无效</translation>
@@ -3436,5 +3437,11 @@ Stage: %2</source>
         <source>Cannot complete the operation</source>
         <translation>无法完成操作</translation>
     </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message><source>Pause animation</source><translation>暂停动画</translation></message>
+    <message><source>Play animation</source><translation>继续播放动画</translation></message>
+    <message><source>Replay animation</source><translation>重播动画</translation></message>
 </context>
 </TS>

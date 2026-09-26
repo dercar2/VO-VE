@@ -383,7 +383,9 @@ void remember_cancellation(std::vector<RequestGeneration> &cancelled,
     cancelled.push_back(generation);
 }
 
-[[nodiscard]] WorkerResult dispatch_job(const WorkerJob &job, const RuntimeExecutor executor) {
+[[nodiscard]] WorkerResult dispatch_job(const WorkerJob &job, const RuntimeExecutor executor,
+                                        const AnimationExecutor animation_executor = nullptr,
+                                        const AnimationEmitter &emit = {}) {
     const auto source = token_to_native_handle(job.source_token);
     const auto output = token_to_native_handle(job.output_token);
     const auto profile = token_to_native_handle(job.profile_token);
@@ -404,7 +406,13 @@ void remember_cancellation(std::vector<RequestGeneration> &cancelled,
                               "worker runtime has no job executor");
     }
     try {
-        auto result = executor({.source = source, .output = output, .profile = profile}, job);
+        const NativeJobIo io{.source = source, .output = output, .profile = profile};
+        auto result = job.source_format_hint == SourceFormatHint::gif_animation
+                          ? (animation_executor != nullptr && emit
+                                 ? animation_executor(io, job, emit)
+                                 : failure_result(job.job_id, ResultStatus::unsupported,
+                                                  "animation executor unavailable"))
+                          : executor(io, job);
         if (!valid_executor_result(result, job)) {
             return failure_result(job.job_id, ResultStatus::internal_error,
                                   "job executor returned invalid result metadata");
@@ -701,7 +709,20 @@ RuntimeExitCode run_worker_runtime(const NativeIoHandle input, const NativeIoHan
         auto result = generation_cancelled(cancelled_generations, job.generation)
                           ? failure_result(job.job_id, ResultStatus::cancelled,
                                            "request generation was cancelled before execution")
-                          : dispatch_job(job, options.executor);
+                          : dispatch_job(job, options.executor, options.animation_executor,
+                              [&](const AnimationFrame &animation) {
+                                  if (animation.image.job_id != job.job_id ||
+                                      !valid_executor_result(animation.image, job))
+                                      return false;
+                                  if (!write_framed_message(output, encode_animation_frame(animation),
+                                                            diagnostic))
+                                      return false;
+                                  const auto reply = read_framed_message(input);
+                                  AnimationAdvance advance;
+                                  return reply.status == FrameReadStatus::success &&
+                                         decode_animation_advance(reply.bytes, advance, decode_error) &&
+                                         advance.job_id == job.job_id && advance.proceed;
+                              });
         const auto result_bytes = encode_worker_result(result);
         if (!write_framed_message(output, result_bytes, diagnostic)) {
             return RuntimeExitCode::io_error;

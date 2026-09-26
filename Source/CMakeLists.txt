@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(VO_VE VERSION 0.2.20 LANGUAGES C CXX)
+project(VO_VE VERSION 0.2.21 LANGUAGES C CXX)
 
 option(VOVE_BUILD_TESTS "Build headless core tests" ON)
 option(VOVE_BUILD_BENCHMARKS "Build headless benchmarks" ON)
@@ -1623,6 +1623,7 @@ if(VOVE_BUILD_QT_APP)
     vove_enable_warnings(vove-raster-webp)
     add_library(vove-raster-qt STATIC
         src/handlers/raster/qt_raster_decoder.cpp
+        src/handlers/raster/gif_animation_decoder.cpp
     )
     add_library(vove::raster_qt ALIAS vove-raster-qt)
     target_include_directories(vove-raster-qt PUBLIC
@@ -1662,6 +1663,9 @@ if(VOVE_BUILD_QT_APP)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:Qt6::QJpegPlugin>"
                 "$<TARGET_FILE_DIR:vove-raster-worker>/imageformats/$<TARGET_FILE_NAME:Qt6::QJpegPlugin>"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:Qt6::QGifPlugin>"
+                "$<TARGET_FILE_DIR:vove-raster-worker>/imageformats/$<TARGET_FILE_NAME:Qt6::QGifPlugin>"
             VERBATIM)
     endif()
     vove_enable_warnings(vove-raster-worker)
@@ -2098,6 +2102,33 @@ if(VOVE_BUILD_QT_APP)
         add_test(NAME vove-raster-supervisor-tests COMMAND vove-raster-supervisor-tests)
         vove_set_qt_test_runtime(vove-raster-supervisor-tests)
         vove_set_qt_image_plugins(vove-raster-supervisor-tests)
+        add_executable(vove-gif-animation-supervisor-tests tests/worker/gif_supervisor_test.cpp)
+        add_executable(vove-gif-animation-io-tests tests/worker/supervisor_animation_io_test.cpp)
+        target_link_libraries(vove-gif-animation-io-tests PRIVATE vove::worker_protocol)
+        if(WIN32)
+            target_sources(vove-gif-animation-io-tests PRIVATE src/worker/windows/runtime_access.cpp)
+            target_compile_definitions(vove-gif-animation-io-tests PRIVATE _WIN32_WINNT=0x0A00 WINVER=0x0A00)
+            target_link_libraries(vove-gif-animation-io-tests PRIVATE advapi32 userenv)
+        endif()
+        if(MINGW)
+            target_link_options(vove-gif-animation-io-tests PRIVATE -static)
+        endif()
+        vove_enable_warnings(vove-gif-animation-io-tests)
+        add_test(NAME vove-gif-animation-io-tests COMMAND vove-gif-animation-io-tests .)
+        set_tests_properties(vove-gif-animation-io-tests PROPERTIES TIMEOUT 30)
+        target_compile_definitions(vove-gif-animation-supervisor-tests PRIVATE
+            "VOVE_TEST_RASTER_WORKER_PATH=\"$<TARGET_FILE:vove-raster-worker>\"")
+        target_link_libraries(vove-gif-animation-supervisor-tests PRIVATE
+            vove::worker_supervisor vove::qoi_codec Qt6::Core)
+        add_dependencies(vove-gif-animation-supervisor-tests vove-raster-worker)
+        vove_enable_warnings(vove-gif-animation-supervisor-tests)
+        add_test(NAME vove-gif-animation-supervisor-tests COMMAND vove-gif-animation-supervisor-tests)
+        vove_set_qt_test_runtime(vove-gif-animation-supervisor-tests)
+        set_tests_properties(vove-gif-animation-supervisor-tests PROPERTIES TIMEOUT 60)
+        if(WIN32)
+            set_tests_properties(vove-gif-animation-supervisor-tests PROPERTIES
+                FIXTURES_REQUIRED vove-gif-runtime-access)
+        endif()
     endif()
 
     add_library(vove-preview-helper-service STATIC
@@ -2109,7 +2140,7 @@ if(VOVE_BUILD_QT_APP)
     target_compile_features(vove-preview-helper-service PUBLIC cxx_std_20)
     vove_enable_warnings(vove-preview-helper-service)
 
-    add_executable(vove-preview-helper src/preview/helper/main.cpp)
+    add_executable(vove-preview-helper src/preview/helper/main.cpp src/preview/helper/gif_stream.cpp)
     target_include_directories(vove-preview-helper PRIVATE src/preview/helper)
     target_link_libraries(vove-preview-helper PRIVATE
         vove-preview-helper-service vove::cache vove::worker_thumbnail_renderer)
@@ -2218,6 +2249,12 @@ if(VOVE_BUILD_QT_APP)
         add_test(NAME vove-preview-helper-service-tests
             COMMAND vove-preview-helper-service-tests)
         vove_set_qt_test_runtime(vove-preview-helper-service-tests)
+        add_executable(vove-gif-animation-decoder-tests tests/handlers/gif_animation_decoder_test.cpp)
+        target_link_libraries(vove-gif-animation-decoder-tests PRIVATE vove::raster_qt)
+        vove_enable_warnings(vove-gif-animation-decoder-tests)
+        add_test(NAME vove-gif-animation-decoder-tests COMMAND vove-gif-animation-decoder-tests)
+        vove_set_qt_test_runtime(vove-gif-animation-decoder-tests)
+        vove_set_qt_image_plugins(vove-gif-animation-decoder-tests)
     endif()
 
     add_subdirectory(src/ui/qt)

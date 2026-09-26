@@ -455,6 +455,7 @@ preview</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message><source>Animation unavailable</source><translation>Анимация недоступна</translation></message>
     <message>
         <source>Invalid Trash operation request</source>
         <translation>Некорректный запрос операции с Корзиной</translation>
@@ -3442,5 +3443,11 @@ Stage: %2</source>
         <source>Cannot complete the operation</source>
         <translation>Операцию не выполнить</translation>
     </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message><source>Pause animation</source><translation>Приостановить анимацию</translation></message>
+    <message><source>Play animation</source><translation>Продолжить анимацию</translation></message>
+    <message><source>Replay animation</source><translation>Повторить анимацию</translation></message>
 </context>
 </TS>

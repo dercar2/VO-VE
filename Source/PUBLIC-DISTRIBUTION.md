@@ -1,13 +1,13 @@
-# VO-VE 0.2.20 Distribution
+# VO-VE 0.2.21 Distribution
 
-Application source commit: a94118241bca5f7aea34975ca5fc392ae9ec1671.
-Build label: PREVIEW-TRASH-20260923.
+Application source commit: c4a75845df10a61cfcd969e3d6097257a82e55dc.
+Build label: GIF-RELEASE-20260927.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
-For the Source/ migration, the public snapshot belongs in Source/ in the release tag's
-automatic ZIP and TAR.GZ archives.
-Until those archives pass content verification and full Windows/Linux builds without WORK,
-the release also retains the custom VO-VE-0.2.20-sources.zip and local source delivery.
+The application snapshot is in Source/ in this release tag's automatic ZIP and TAR.GZ archives.
+The Source/ migration passed clean Windows/Linux builds in v0.2.20. Subsequent releases verify
+the tagged source contents against the frozen build source; clean builds are repeated when
+the export policy, build recipes or dependencies change. No custom sources.zip is uploaded.
 Unchanged dependency supplements are reused from a pinned public
 release; they are not duplicate uploads or entries in this release's SHA256SUMS.txt:
 
@@ -25,6 +25,8 @@ It uses Windows Schannel and the system certificate store; OpenSSL DLLs are not 
 The exact plugin source is in qtbase-everywhere-src-6.10.3/src/plugins/tls/schannel within
 the full Qt source archive already supplied. Qt's original notices cover this component.
 Older runtime indexes observe the baseline DLL set; this paragraph records the added plugin.
+Qt 6.10.3 imageformats/qgif.dll is also covered by those full qtbase sources and notices
+(src/plugins/imageformats/gif). It adds no new framework dependency.
 
 VO-VE-authored code is GPL-3.0-or-later. MuPDF is AGPL-3.0-or-later, not commercially licensed.
 Third-party components retain their original licenses. The companion notices and exact dependency

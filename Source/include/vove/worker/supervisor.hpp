@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,11 @@ struct SupervisorRequest {
     std::string expected_build_id;
     std::chrono::milliseconds timeout{30'000};
     bool require_minimum_sandbox{true};
+    // Required only for gif_animation. Reads the stable output slot synchronously; returning
+    // true acknowledges it for reuse. Playback/pause time here is excluded from the timeout.
+    std::function<bool(const AnimationFrame &)> animation_frame_handler{};
+    // Must not block. Polled during launch/IPC; also unblock a waiting frame handler on cancel.
+    std::function<bool()> cancelled{};
 };
 
 struct SupervisorResult {
@@ -94,6 +100,9 @@ struct ExternalRendererResult {
 
 // Executes one isolated job. The worker receives duplicated/inherited OS objects, never source or
 // output paths. Platform implementations must enforce the timeout even if IPC stops responding.
+// GIF jobs stream acknowledged frames with a fresh timeout per frame. A stopped session returns
+// ResultStatus::cancelled; exceptions from either callback terminate/reap and report
+// transport_error.
 [[nodiscard]] SupervisorResult run_worker_once(const SupervisorRequest &request);
 
 // Executes one fixed-command renderer with the source on stdin and the bounded output on stdout.

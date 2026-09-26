@@ -191,6 +191,14 @@ RuntimeAccessResult prepare_windows_worker_runtime(const std::filesystem::path &
         auto error = grant_one(jpeg_plugin, sid.get(), false);
         if (error != ERROR_SUCCESS)
             return {error, "imageformats/qjpeg.dll"};
+        const auto gif_plugin = image_formats / L"qgif.dll";
+        if (GetFileAttributesW(gif_plugin.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            error = grant_one(gif_plugin, sid.get(), false);
+            if (error != ERROR_SUCCESS)
+                return {error, "imageformats/qgif.dll"};
+        } else if (GetLastError() != ERROR_FILE_NOT_FOUND && GetLastError() != ERROR_PATH_NOT_FOUND) {
+            return {GetLastError(), "imageformats/qgif.dll"};
+        }
         error = grant_one(image_formats, sid.get(), true);
         if (error != ERROR_SUCCESS)
             return {error, "imageformats"};

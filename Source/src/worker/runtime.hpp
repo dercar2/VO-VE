@@ -3,6 +3,7 @@
 #include "vove/worker/protocol.hpp"
 
 #include <cstddef>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -32,6 +33,9 @@ struct NativeJobIo {
 
 // Runtime resolves and validates both tokens before invoking an executor; no paths are exposed.
 using RuntimeExecutor = WorkerResult (*)(NativeJobIo io, const WorkerJob &job);
+using AnimationEmitter = std::function<bool(const AnimationFrame &)>;
+using AnimationExecutor = WorkerResult (*)(NativeJobIo io, const WorkerJob &job,
+                                           const AnimationEmitter &emit);
 
 enum class FrameReadStatus {
     success,
@@ -64,6 +68,7 @@ struct RuntimeOptions {
     bool receive_posix_objects{};
 #endif
     RuntimeExecutor executor{execute_synthetic_job_native};
+    AnimationExecutor animation_executor{};
 };
 
 [[nodiscard]] FrameReadResult read_framed_message(NativeIoHandle input);

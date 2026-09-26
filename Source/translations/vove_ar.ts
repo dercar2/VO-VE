@@ -455,6 +455,7 @@ preview</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message><source>Animation unavailable</source><translation>الرسوم المتحركة غير متاحة</translation></message>
     <message>
         <source>Invalid Trash operation request</source>
         <translation>طلب عملية سلة المحذوفات غير صالح</translation>
@@ -3451,5 +3452,11 @@ Stage: %2</source>
         <source>Cannot complete the operation</source>
         <translation>لا يمكن إكمال العملية</translation>
     </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message><source>Pause animation</source><translation>إيقاف الرسوم المتحركة مؤقتًا</translation></message>
+    <message><source>Play animation</source><translation>متابعة الرسوم المتحركة</translation></message>
+    <message><source>Replay animation</source><translation>إعادة تشغيل الرسوم المتحركة</translation></message>
 </context>
 </TS>
