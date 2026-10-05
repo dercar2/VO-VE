@@ -12,7 +12,7 @@
 
 namespace vove::fileops {
 
-inline constexpr std::uint32_t kTrashTransactionVersion = 10;
+inline constexpr std::uint32_t kTrashTransactionVersion = 11;
 inline constexpr std::size_t kMaximumTrashItems = 10'000;
 inline constexpr std::size_t kMaximumTrashDirectoryEntries = 10'000;
 
@@ -39,6 +39,8 @@ enum class TrashPhase : std::uint8_t {
     purge_manifest_remove_intent,
     purge_container_remove_intent,
     purged,
+    cancel_remaining_intent,
+    cancel_container_remove_intent,
 };
 
 enum class TrashItemLocation : std::uint8_t {
@@ -89,6 +91,8 @@ struct TrashItem {
     TrashSecurityState security_state{TrashSecurityState::original};
     std::string original_security_descriptor_sddl_utf8;
     TrashPayloadPolicy payload_policy{TrashPayloadPolicy::strict};
+    // Stable filename slot, preserved when cancellation compacts the retained item set.
+    std::uint32_t storage_index{};
 };
 
 struct TrashTransaction {

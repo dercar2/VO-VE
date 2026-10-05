@@ -9,6 +9,7 @@
 #include "windows/file_identity.hpp"
 #include "windows/file_time.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <array>
 #include <cstring>
@@ -284,6 +285,58 @@ bool same_acl(const PACL actual, const PACL expected) {
         }
     }
     return true;
+}
+
+using SimpleFileGrants = std::vector<std::vector<std::byte>>;
+
+std::optional<SimpleFileGrants> simple_allow_file_grants(const PACL acl) {
+    if (acl == nullptr || IsValidAcl(acl) == FALSE)
+        return std::nullopt;
+    SimpleFileGrants grants;
+    grants.reserve(acl->AceCount);
+    for (DWORD index{}; index < acl->AceCount; ++index) {
+        void *raw{};
+        if (GetAce(acl, index, &raw) == FALSE)
+            return std::nullopt;
+        const auto *ace = static_cast<const ACCESS_ALLOWED_ACE *>(raw);
+        constexpr auto sid_offset = offsetof(ACCESS_ALLOWED_ACE, SidStart);
+        constexpr auto minimum_sid_bytes = offsetof(SID, SubAuthority);
+        if (ace->Header.AceType != ACCESS_ALLOWED_ACE_TYPE ||
+            (ace->Header.AceFlags & ~INHERITED_ACE) != 0 ||
+            ace->Header.AceSize < sid_offset + minimum_sid_bytes) {
+            return std::nullopt;
+        }
+        const auto *sid = reinterpret_cast<const SID *>(&ace->SidStart);
+        const auto sid_bytes = GetSidLengthRequired(sid->SubAuthorityCount);
+        if (sid_offset + sid_bytes != ace->Header.AceSize ||
+            IsValidSid(const_cast<SID *>(sid)) == FALSE) {
+            return std::nullopt;
+        }
+        const auto *bytes = static_cast<const std::byte *>(raw);
+        grants.emplace_back(bytes, bytes + ace->Header.AceSize);
+        grants.back()[offsetof(ACE_HEADER, AceFlags)] = std::byte{};
+    }
+    // Preserve every mask, SID and duplicate grant; only provenance and order are representation.
+    std::sort(grants.begin(), grants.end());
+    return grants;
+}
+
+bool same_preserved_file_acl(const HANDLE handle, const PACL actual, const PACL expected) {
+    if (same_acl(actual, expected))
+        return true;
+    if (actual == nullptr || expected == nullptr || actual->AclRevision != expected->AclRevision ||
+        actual->AceCount != expected->AceCount)
+        return false;
+    FILE_ATTRIBUTE_TAG_INFO attributes{};
+    if (GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &attributes,
+                                     sizeof(attributes)) == FALSE ||
+        (attributes.FileAttributes &
+         (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DEVICE)) != 0) {
+        return false;
+    }
+    const auto actual_grants = simple_allow_file_grants(actual);
+    const auto expected_grants = simple_allow_file_grants(expected);
+    return actual_grants && expected_grants && *actual_grants == *expected_grants;
 }
 
 bool verify_exact_owned_dacl(const HANDLE handle, const std::wstring &descriptor_text,
@@ -574,13 +627,12 @@ bool verify_preserved_trash_security_handle(void *handle, const std::string &sdd
                GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted) && present && dacl &&
                IsValidAcl(dacl) && GetSecurityDescriptorControl(sd, &control, &revision);
     };
-    constexpr auto mask = SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED | SE_DACL_AUTO_INHERIT_REQ;
     if (!read(expected, expected_owner, expected_group, expected_dacl, expected_control) ||
         !read(actual, actual_owner, actual_group, actual_dacl, actual_control) ||
         !EqualSid(expected_owner, actual_owner) || !EqualSid(expected_group, actual_group) ||
-        (expected_control & mask) != (actual_control & mask) ||
-        !same_acl(actual_dacl, expected_dacl)) {
-        detail = "Trash payload owner or DACL differs from its preserved baseline";
+        expected_control != actual_control ||
+        !same_preserved_file_acl(handle, actual_dacl, expected_dacl)) {
+        detail = "Trash payload owner, group, control or DACL differs from its preserved baseline";
         return false;
     }
     return true;

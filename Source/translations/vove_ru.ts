@@ -3450,4 +3450,17 @@ Stage: %2</source>
     <message><source>Play animation</source><translation>Продолжить анимацию</translation></message>
     <message><source>Replay animation</source><translation>Повторить анимацию</translation></message>
 </context>
+<context>
+    <name>TrashRecoveryDialog</name>
+    <message><source>Unfinished operation…</source><translation>Незавершённая операция…</translation></message>
+    <message><source>Trash permissions differ from the recorded state</source><translation>Права доступа Корзины отличаются от сохранённых</translation></message>
+    <message><source>Trash records do not match; recovery is required</source><translation>Записи Корзины не совпадают; требуется восстановление</translation></message>
+    <message><source>Remaining moves cancelled. Kept in Trash: %1</source><translation>Оставшееся перемещение отменено. В Корзине сохранено: %1</translation></message>
+    <message><source>Recorded moves to Trash: %1 of %2</source><translation>Зафиксировано в Корзине: %1 из %2</translation></message>
+    <message><source>Already moved items stay in Trash. Remaining source files stay in place.</source><translation>Уже перенесённые объекты останутся в Корзине. Остальные исходные файлы останутся на месте.</translation></message>
+    <message><source>This operation can be retried; cancelling it here is not supported.</source><translation>Можно повторить восстановление этой операции. Её отмена в этом окне не поддерживается.</translation></message>
+    <message><source>Retry recovery</source><translation>Повторить восстановление</translation></message>
+    <message><source>Cancel remaining moves</source><translation>Отменить оставшееся перемещение</translation></message>
+    <message><source>The operation could not be started. Its record was kept.</source><translation>Не удалось запустить операцию. Её запись сохранена.</translation></message>
+</context>
 </TS>

@@ -190,8 +190,10 @@ bool location_allowed(const TrashPhase phase, const TrashItemLocation location) 
         return location == TrashItemLocation::source;
     case TrashPhase::moving:
     case TrashPhase::rollback:
+    case TrashPhase::cancel_remaining_intent:
         return location == TrashItemLocation::source || location == TrashItemLocation::stored;
     case TrashPhase::rollback_container_remove_intent:
+    case TrashPhase::cancel_container_remove_intent:
         return location == TrashItemLocation::source;
     case TrashPhase::manifest_intent:
     case TrashPhase::published:
@@ -222,12 +224,15 @@ bool active_step_matches(const TrashTransaction &transaction) {
     }
     const auto location = transaction.items[transaction.active_index].location;
     if (transaction.active_step == TrashStep::store) {
-        return (transaction.phase == TrashPhase::moving && location == TrashItemLocation::source) ||
+        return ((transaction.phase == TrashPhase::moving ||
+                 transaction.phase == TrashPhase::cancel_remaining_intent) &&
+                location == TrashItemLocation::source) ||
                (transaction.phase == TrashPhase::restore_rollback &&
                 location == TrashItemLocation::source);
     }
     if (transaction.active_step == TrashStep::restore) {
-        return (transaction.phase == TrashPhase::rollback &&
+        return ((transaction.phase == TrashPhase::rollback ||
+                 transaction.phase == TrashPhase::cancel_remaining_intent) &&
                 location == TrashItemLocation::stored) ||
                (transaction.phase == TrashPhase::restoring &&
                 location == TrashItemLocation::stored);
@@ -382,8 +387,10 @@ bool valid_trash_transaction(const TrashTransaction &transaction, std::string &d
             item.original.parent_path().lexically_normal() != parent ||
             item.restore_path.parent_path().lexically_normal() != restore_parent ||
             item.original.filename() != item.restore_path.filename() ||
+            item.storage_index >= kMaximumTrashItems ||
+            (index != 0 && item.storage_index <= transaction.items[index - 1U].storage_index) ||
             item.stored != stored_path(item.restore_path, transaction.operation_id,
-                                       container.parent_path(), index) ||
+                                       container.parent_path(), item.storage_index) ||
             !expected_current(item) || !location_allowed(transaction.phase, item.location) ||
             core::is_trash_filename(item.original.filename().u8string())) {
             detail_utf8 = "trash transaction item path or location is inconsistent";
@@ -514,7 +521,8 @@ TrashTransaction prepare_trash_transaction(const std::vector<TrashSource> &sourc
              .security_state = TrashSecurityState::original,
              .original_security_descriptor_sddl_utf8 =
                  sources[index].original_security_descriptor_sddl_utf8,
-             .payload_policy = sources[index].payload_policy});
+             .payload_policy = sources[index].payload_policy,
+             .storage_index = static_cast<std::uint32_t>(index)});
     }
     std::string detail;
     if (!valid_trash_transaction(transaction, detail)) {
@@ -530,8 +538,20 @@ std::vector<std::byte> encode_trash_transaction(const TrashTransaction &transact
     }
     std::vector<std::byte> payload;
     payload.reserve(128U + transaction.items.size() * 192U);
+    // Keep ordinary plans byte-compatible with v10. Cancellation phases and sparse retained
+    // slots need v11; decode always upgrades either wire schema to the current in-memory model.
+    auto wire_version = std::uint32_t{10};
+    if (transaction.phase == TrashPhase::cancel_remaining_intent ||
+        transaction.phase == TrashPhase::cancel_container_remove_intent) {
+        wire_version = kTrashTransactionVersion;
+    }
+    for (std::size_t index{}; index < transaction.items.size(); ++index) {
+        if (transaction.items[index].storage_index != index) {
+            wire_version = kTrashTransactionVersion;
+        }
+    }
     append_integer(payload, transactionMagic);
-    append_integer(payload, transaction.version);
+    append_integer(payload, wire_version);
     append_integer(payload, transaction.operation_id);
     append_integer(payload, transaction.created_unix_ns);
     append_integer(payload, static_cast<std::uint8_t>(transaction.phase));
@@ -574,6 +594,9 @@ std::vector<std::byte> encode_trash_transaction(const TrashTransaction &transact
         append_integer(payload, static_cast<std::uint8_t>(item.security_state));
         append_string(payload, item.original_security_descriptor_sddl_utf8);
         append_integer(payload, static_cast<std::uint8_t>(item.payload_policy));
+        if (wire_version >= 11) {
+            append_integer(payload, item.storage_index);
+        }
     }
     if (payload.size() > maximumPayloadBytes) {
         throw std::length_error("trash transaction exceeds the journal limit");
@@ -604,8 +627,11 @@ bool decode_trash_transaction(const std::span<const std::byte> payload,
         (decoded.version != legacyTransactionVersion &&
          decoded.version != previousTransactionVersion &&
          decoded.version != directoryTransactionVersion &&
+         decoded.version != 10 &&
          decoded.version != kTrashTransactionVersion) ||
-        phase > static_cast<std::uint8_t>(TrashPhase::purged) ||
+        phase > static_cast<std::uint8_t>(decoded.version >= 11
+                                            ? TrashPhase::cancel_container_remove_intent
+                                            : TrashPhase::purged) ||
         step > static_cast<std::uint8_t>(TrashStep::purge) ||
         evidence > static_cast<std::uint8_t>(OperationEvidence::conflicting) ||
         failure > static_cast<std::uint8_t>(OperationStatus::file_in_use) || item_count == 0 ||
@@ -705,6 +731,11 @@ bool decode_trash_transaction(const std::span<const std::byte> payload,
                 return false;
             }
             item.payload_policy = static_cast<TrashPayloadPolicy>(policy);
+        }
+        item.storage_index = index;
+        if (decoded.version >= 11 && !cursor.read(item.storage_index)) {
+            detail_utf8 = "trash storage index is truncated";
+            return false;
         }
         decoded.items.push_back(std::move(item));
     }

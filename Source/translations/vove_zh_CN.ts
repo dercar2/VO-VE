@@ -3444,4 +3444,17 @@ Stage: %2</source>
     <message><source>Play animation</source><translation>继续播放动画</translation></message>
     <message><source>Replay animation</source><translation>重播动画</translation></message>
 </context>
+<context>
+    <name>TrashRecoveryDialog</name>
+    <message><source>Unfinished operation…</source><translation>未完成的操作…</translation></message>
+    <message><source>Trash permissions differ from the recorded state</source><translation>回收站权限与记录的状态不同</translation></message>
+    <message><source>Trash records do not match; recovery is required</source><translation>回收站记录不一致；需要恢复</translation></message>
+    <message><source>Remaining moves cancelled. Kept in Trash: %1</source><translation>已取消剩余移动。回收站中保留：%1</translation></message>
+    <message><source>Recorded moves to Trash: %1 of %2</source><translation>回收站中已记录：%1，共 %2</translation></message>
+    <message><source>Already moved items stay in Trash. Remaining source files stay in place.</source><translation>已移动的项目保留在回收站中。剩余源文件保留在原位置。</translation></message>
+    <message><source>This operation can be retried; cancelling it here is not supported.</source><translation>可以重试恢复此操作，但不支持在此处取消。</translation></message>
+    <message><source>Retry recovery</source><translation>重试恢复</translation></message>
+    <message><source>Cancel remaining moves</source><translation>取消剩余移动</translation></message>
+    <message><source>The operation could not be started. Its record was kept.</source><translation>无法启动操作。其记录已保留。</translation></message>
+</context>
 </TS>

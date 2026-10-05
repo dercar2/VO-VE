@@ -105,6 +105,9 @@ class TrashCoordinator final {
     [[nodiscard]] bool purge(std::filesystem::path manifest_path, Progress progress,
                              Completion completion);
     [[nodiscard]] bool resume(Progress progress, Completion completion);
+    // Finalizes an idle pending move: stored items remain in Trash, sources are not moved.
+    // Restore/purge cancellation reports unsupported and retains their recovery journal.
+    [[nodiscard]] bool cancel_remaining(Progress progress, Completion completion);
     [[nodiscard]] bool busy() const noexcept;
     [[nodiscard]] bool stopping() const noexcept;
     [[nodiscard]] bool recovery_pending() const noexcept;

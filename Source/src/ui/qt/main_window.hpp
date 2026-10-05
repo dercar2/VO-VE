@@ -124,6 +124,7 @@ class MainWindow final : public QMainWindow {
         move,
         restore,
         purge,
+        cancel_move,
     };
 
     struct GridViewState {
@@ -281,6 +282,7 @@ class MainWindow final : public QMainWindow {
     void show_components_dialog();
     void show_contact_dialog(bool support);
     void show_update_dialog();
+    void show_unfinished_operation_dialog();
     void retranslate_shell();
     void open_external_items_in_parent(const QStringList &paths);
     void show_entry_in_catalog(const core::DirectoryEntry &entry);
@@ -409,7 +411,7 @@ class MainWindow final : public QMainWindow {
     void set_rename_in_flight(bool in_flight);
     [[nodiscard]] bool submit_batch_rename_recovery();
     [[nodiscard]] bool submit_delete_recovery();
-    [[nodiscard]] bool submit_trash_recovery();
+    [[nodiscard]] bool submit_trash_recovery(bool cancel_remaining = false);
     [[nodiscard]] bool submit_file_transfer_recovery();
     [[nodiscard]] bool submit_directory_transfer_recovery();
     void offer_directory_transfer_discard();
@@ -596,6 +598,7 @@ class MainWindow final : public QMainWindow {
     QAction *pasteObjectsAction_{};
     QAction *trashAction_{};
     QAction *settingsAction_{};
+    QAction *unfinishedOperationAction_{};
     QAction *updateAction_{};
     QAction *aboutAction_{};
     QAction *componentsAction_{};

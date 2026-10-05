@@ -1,7 +1,7 @@
 # Building VO-VE
 
-Generated from clean tracked WORK at commit c4a75845df10a61cfcd969e3d6097257a82e55dc.
-Build label: GIF-RELEASE-20260927
+Generated from clean tracked WORK at commit 02b7f4f387a2dae7ae437642b3ada611dc17381e.
+Build label: TRASH-RECOVERY-20261005
 In the public tag archive, this snapshot is the Source/ directory beside Site/.
 See PUBLIC-DISTRIBUTION.md (added during release assembly) for pinned supplement URLs
 and SHA-256 digests. LICENSE, THIRD_PARTY_NOTES.md and dependency notices accompany the source.

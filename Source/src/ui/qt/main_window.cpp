@@ -780,7 +780,21 @@ bool ambiguous_rename_status(const fileops::OperationStatus status) {
            status == Status::unknown_outcome || status == Status::io_error;
 }
 
-QString trash_operation_error_text(const fileops::OperationStatus status) {
+QString trash_operation_error_text(const fileops::OperationStatus status,
+                                  const std::string_view detail = {}) {
+    if (detail.find("DACL") != std::string_view::npos ||
+        detail.find("security baseline") != std::string_view::npos ||
+        detail.find("foreign owner") != std::string_view::npos) {
+        return QCoreApplication::translate("TrashRecoveryDialog",
+                                           "Trash permissions differ from the recorded state");
+    }
+    if ((detail.find("manifest") != std::string_view::npos ||
+         detail.find("plan") != std::string_view::npos) &&
+        (detail.find("identity differs") != std::string_view::npos ||
+         detail.find("different operation") != std::string_view::npos)) {
+        return QCoreApplication::translate("TrashRecoveryDialog",
+                                           "Trash records do not match; recovery is required");
+    }
     using Status = fileops::OperationStatus;
     switch (status) {
     case Status::success:
@@ -1928,6 +1942,8 @@ void MainWindow::build_ui() {
     componentsAction_->setObjectName(QStringLiteral("componentsAction"));
     updateAction_ = mainMenu_->addAction(QString());
     updateAction_->setObjectName(QStringLiteral("updateAction"));
+    unfinishedOperationAction_ = mainMenu_->addAction(QString());
+    unfinishedOperationAction_->setObjectName(QStringLiteral("unfinishedOperationAction"));
     mainMenu_->addSeparator();
     aboutAction_ = mainMenu_->addAction(QString());
     aboutAction_->setObjectName(QStringLiteral("aboutAction"));
@@ -2400,6 +2416,8 @@ void MainWindow::build_ui() {
     connect(upButton_, &QToolButton::clicked, this, &MainWindow::go_up);
     connect(createFolderAction_, &QAction::triggered, this, &MainWindow::prompt_create_directory);
     connect(settingsAction_, &QAction::triggered, this, &MainWindow::show_settings_dialog);
+    connect(unfinishedOperationAction_, &QAction::triggered, this,
+            &MainWindow::show_unfinished_operation_dialog);
     connect(updateAction_, &QAction::triggered, this, &MainWindow::show_update_dialog);
     connect(aboutAction_, &QAction::triggered, this, &MainWindow::show_about_dialog);
     connect(componentsAction_, &QAction::triggered, this, &MainWindow::show_components_dialog);
@@ -5620,6 +5638,7 @@ void MainWindow::handle_trash_progress(const fileops::TrashProgress &progress) {
         phase = QCoreApplication::translate("MainWindow", "rolling back move");
         break;
     case fileops::TrashPhase::manifest_intent:
+    case fileops::TrashPhase::cancel_remaining_intent:
         phase = QCoreApplication::translate("MainWindow", "saving operation");
         break;
     case fileops::TrashPhase::published:
@@ -5643,6 +5662,7 @@ void MainWindow::handle_trash_progress(const fileops::TrashProgress &progress) {
         break;
     case fileops::TrashPhase::purge_manifest_remove_intent:
     case fileops::TrashPhase::purge_container_remove_intent:
+    case fileops::TrashPhase::cancel_container_remove_intent:
         phase = QCoreApplication::translate("MainWindow", "cleaning records");
         break;
     case fileops::TrashPhase::purged:
@@ -5675,7 +5695,10 @@ void MainWindow::handle_trash_result(const fileops::TrashResult &result,
     setProperty("trashRecoveryPending", owns_recovery);
     if (result.ok()) {
         operationStatus_ =
-            purging     ? QCoreApplication::translate("MainWindow", "Files permanently deleted: %1")
+            intent == TrashOperationIntent::cancel_move
+                ? QCoreApplication::translate("TrashRecoveryDialog",
+                      "Remaining moves cancelled. Kept in Trash: %1").arg(result.completed)
+            : purging     ? QCoreApplication::translate("MainWindow", "Files permanently deleted: %1")
                               .arg(result.completed)
             : restoring ? QCoreApplication::translate("MainWindow", "Files restored: %1")
                               .arg(result.completed)
@@ -5716,8 +5739,9 @@ void MainWindow::handle_trash_result(const fileops::TrashResult &result,
                result.status == fileops::TrashRunStatus::stopped) {
         operationStatus_ = QCoreApplication::translate(
             "MainWindow", "VO-VE Trash operation paused. Press F5 to recover");
-        if (result.operation_status != fileops::OperationStatus::success) {
-            operationStatus_ += QStringLiteral(": ") + operation_status_text(result.operation_status);
+        const auto reason = trash_operation_error_text(result.operation_status, result.detail_utf8);
+        if (!reason.isEmpty()) {
+            operationStatus_ += QStringLiteral(": ") + reason;
         }
         begin_preview_generation(false);
         listModel_.mark_previews_verification_pending();
@@ -5748,7 +5772,7 @@ void MainWindow::handle_trash_result(const fileops::TrashResult &result,
             : restoring
                 ? QCoreApplication::translate("MainWindow", "Restore failed")
                 : QCoreApplication::translate("MainWindow", "Files were not moved to Trash");
-        const auto reason = trash_operation_error_text(result.operation_status);
+        const auto reason = trash_operation_error_text(result.operation_status, result.detail_utf8);
         if (!reason.isEmpty()) {
             operationStatus_ += QStringLiteral(": ") + reason;
         }
@@ -6324,7 +6348,7 @@ void MainWindow::leave_trash_view() {
     listModel_.set_tooltip_paths({});
     listModel_.replace_catalog({});
     listModel_.set_drag_and_edit_enabled(true);
-    globalSearchEdit_->setEnabled(true);
+    globalSearchEdit_->setEnabled(filterEdit_->text().isEmpty());
     listView_->setDragEnabled(true);
     listView_->setAcceptDrops(true);
     listView_->viewport()->setAcceptDrops(true);
@@ -6666,7 +6690,7 @@ bool MainWindow::submit_delete_recovery() {
     return submitted;
 }
 
-bool MainWindow::submit_trash_recovery() {
+bool MainWindow::submit_trash_recovery(const bool cancel_remaining) {
     if (renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
         fileTransferCoordinator_.busy() || trashCoordinator_.busy() ||
         !trashCoordinator_.owns_recovery() || permanentDeleteCoordinator_.busy() ||
@@ -6680,12 +6704,15 @@ bool MainWindow::submit_trash_recovery() {
     const auto purging = loaded.ok() &&
                          loaded.encoding == fileops::CurrentOperationJournalEncoding::typed &&
                          loaded.kind == fileops::CurrentOperationKind::trash_purge;
-    const auto intent = purging     ? TrashOperationIntent::purge
+    const auto intent = cancel_remaining ? TrashOperationIntent::cancel_move
+                        : purging     ? TrashOperationIntent::purge
                         : restoring ? TrashOperationIntent::restore
                                     : TrashOperationIntent::move;
     set_delete_in_flight(true);
     const QPointer<MainWindow> window(this);
-    const auto submitted = trashCoordinator_.resume(
+    const auto method = cancel_remaining ? &fileops::TrashCoordinator::cancel_remaining
+                                        : &fileops::TrashCoordinator::resume;
+    const auto submitted = (trashCoordinator_.*method)(
         [window](fileops::TrashProgress progress) mutable {
             if (!window.isNull()) {
                 QMetaObject::invokeMethod(
@@ -7145,6 +7172,20 @@ void MainWindow::update_rename_action() {
             !pendingExternalDirectoryDrop_.has_value() &&
             !pendingExternalTransferDrop_.has_value() && dropProbeSource_.idle());
     }
+    if (unfinishedOperationAction_ != nullptr) {
+        unfinishedOperationAction_->setEnabled(
+            (property("trashRecoveryPending").toBool() ||
+             property("batchRenameRecoveryPending").toBool() ||
+             property("permanentDeleteRecoveryPending").toBool() ||
+             property("fileTransferRecoveryPending").toBool() ||
+             property("directoryTransferRecoveryPending").toBool() ||
+             property("fileOperationJournalBlocked").toBool()) &&
+            !renameInFlight_ && !deleteInFlight_ && !transferInFlight_ &&
+            !createDirectoryInFlight_ && !fileOperationService_.busy() &&
+            !batchRenameCoordinator_.busy() && !permanentDeleteCoordinator_.busy() &&
+            !trashCoordinator_.busy() && !fileTransferCoordinator_.busy() &&
+            !directoryTransferService_.busy());
+    }
     if (createFolderAction_ != nullptr) {
         createFolderAction_->setEnabled(
             !trashViewActive_ && !globalSearchActive_ && !recursiveViewActive_ && !renameInFlight_ && !deleteInFlight_ &&
@@ -7228,6 +7269,8 @@ void MainWindow::restore_pending_rename_selection() {
 
 void MainWindow::apply_filter() {
     pendingNavigationRestore_.reset();
+    globalSearchEdit_->setEnabled(!trashViewActive_ &&
+                                 (globalSearchActive_ || filterEdit_->text().isEmpty()));
     if (globalSearchActive_) {
         update_status(lastUpdate_);
         return;
@@ -7318,6 +7361,8 @@ void MainWindow::retranslate_shell() {
     createFolderAction_->setText(QCoreApplication::translate("MainWindow", "Create Folder"));
     languageMenu_->setTitle(ui_text(UiTextId::language));
     settingsAction_->setText(ui_text(UiTextId::settings));
+    unfinishedOperationAction_->setText(
+        QCoreApplication::translate("TrashRecoveryDialog", "Unfinished operation…"));
     updateAction_->setText(ui_text(UiTextId::check_updates));
     aboutAction_->setText(ui_text(UiTextId::about));
     componentsAction_->setText(ui_text(UiTextId::components));
@@ -7438,6 +7483,82 @@ void MainWindow::show_update_dialog() {
 #endif
     updates::UpdateDialog dialog(std::move(configuration), version, this);
     dialog.exec();
+}
+
+void MainWindow::show_unfinished_operation_dialog() {
+    const auto state = refresh_current_operation_journal_state();
+    if (state == CurrentOperationJournalState::none ||
+        !unfinishedOperationAction_->isEnabled()) return;
+    const auto loaded = fileops::CurrentOperationJournalStore(currentOperationJournalPath_).read();
+    fileops::TrashTransaction transaction;
+    std::string detail;
+    const auto is_trash = loaded.ok() &&
+        loaded.encoding == fileops::CurrentOperationJournalEncoding::typed &&
+        (loaded.kind == fileops::CurrentOperationKind::trash_move ||
+         loaded.kind == fileops::CurrentOperationKind::trash_restore ||
+         loaded.kind == fileops::CurrentOperationKind::trash_purge);
+    const auto decoded = is_trash &&
+        fileops::decode_trash_transaction(loaded.payload, transaction, detail);
+    const auto cancellable = decoded && loaded.kind == fileops::CurrentOperationKind::trash_move &&
+        (transaction.phase == fileops::TrashPhase::prepared ||
+         transaction.phase == fileops::TrashPhase::moving ||
+         transaction.phase == fileops::TrashPhase::cancel_remaining_intent ||
+         transaction.phase == fileops::TrashPhase::cancel_container_remove_intent);
+    const auto text = [](const char *source) {
+        return QCoreApplication::translate("TrashRecoveryDialog", source);
+    };
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("unfinishedOperationDialog"));
+    dialog.setProperty("mainMenuDialog", true);
+    dialog.setWindowTitle(text("Unfinished operation…"));
+    dialog.setMinimumWidth(440);
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(12);
+    const auto add_label = [&](const QString &value) {
+        auto *label = new QLabel(value, &dialog);
+        label->setTextFormat(Qt::PlainText);
+        label->setWordWrap(true);
+        layout->addWidget(label);
+    };
+    if (decoded) {
+        const auto stored = std::ranges::count_if(transaction.items, [](const auto &item) {
+            return item.location == fileops::TrashItemLocation::stored;
+        });
+        add_label(text("Recorded moves to Trash: %1 of %2")
+            .arg(static_cast<qulonglong>(stored)).arg(transaction.items.size()));
+        if (transaction.failure_status != fileops::OperationStatus::success) {
+            add_label(trash_operation_error_text(transaction.failure_status,
+                                                 transaction.failure_detail_utf8));
+        }
+    } else {
+        add_label(operationStatus_);
+    }
+    add_label(cancellable
+        ? text("Already moved items stay in Trash. Remaining source files stay in place.")
+        : text("This operation can be retried; cancelling it here is not supported."));
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    auto *retry = buttons->addButton(text("Retry recovery"), QDialogButtonBox::ActionRole);
+    retry->setObjectName(QStringLiteral("retryRecoveryButton"));
+    retry->setAutoDefault(false);
+    connect(retry, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(1); });
+    if (cancellable) {
+        auto *cancel = buttons->addButton(text("Cancel remaining moves"), QDialogButtonBox::ActionRole);
+        cancel->setObjectName(QStringLiteral("cancelRemainingMovesButton"));
+        cancel->setAutoDefault(false);
+        connect(cancel, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(2); });
+    }
+    auto *close = buttons->button(QDialogButtonBox::Close);
+    close->setDefault(true);
+    close->setFocus();
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    const auto choice = dialog.exec();
+    if (choice == 1) refresh_catalog();
+    else if (choice == 2 && !submit_trash_recovery(true)) {
+        operationStatus_ = text("The operation could not be started. Its record was kept.");
+        update_status(lastUpdate_);
+    }
 }
 
 void MainWindow::show_about_dialog() {
@@ -8080,6 +8201,8 @@ void MainWindow::show_entry_in_catalog(const core::DirectoryEntry &entry) {
 }
 
 void MainWindow::schedule_global_search() {
+    filterEdit_->setEnabled(!globalSearchActive_ &&
+                            globalSearchEdit_->text().trimmed().isEmpty());
     if (globalSearchActive_) update_catalog_tools();
     if (globalSearchEdit_->text().trimmed().isEmpty()) {
         globalSearchTimer_->stop();
@@ -8092,6 +8215,10 @@ void MainWindow::schedule_global_search() {
 }
 
 void MainWindow::start_global_search() {
+    if (!globalSearchEdit_->isEnabled()) {
+        globalSearchTimer_->stop();
+        return;
+    }
     if (transferInFlight_ || deleteInFlight_ || renameInFlight_ || createDirectoryInFlight_) {
         if (!globalSearchEdit_->text().trimmed().isEmpty()) globalSearchTimer_->start();
         return;

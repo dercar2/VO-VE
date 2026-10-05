@@ -3459,4 +3459,17 @@ Stage: %2</source>
     <message><source>Play animation</source><translation>متابعة الرسوم المتحركة</translation></message>
     <message><source>Replay animation</source><translation>إعادة تشغيل الرسوم المتحركة</translation></message>
 </context>
+<context>
+    <name>TrashRecoveryDialog</name>
+    <message><source>Unfinished operation…</source><translation>عملية غير مكتملة…</translation></message>
+    <message><source>Trash permissions differ from the recorded state</source><translation>أذونات سلة المحذوفات تختلف عن الحالة المسجلة</translation></message>
+    <message><source>Trash records do not match; recovery is required</source><translation>سجلات سلة المحذوفات غير متطابقة؛ يلزم الاسترداد</translation></message>
+    <message><source>Remaining moves cancelled. Kept in Trash: %1</source><translation>أُلغي النقل المتبقي. العناصر المحفوظة في السلة: %1</translation></message>
+    <message><source>Recorded moves to Trash: %1 of %2</source><translation>العناصر المسجلة في السلة: %1 من %2</translation></message>
+    <message><source>Already moved items stay in Trash. Remaining source files stay in place.</source><translation>تبقى العناصر المنقولة في سلة المحذوفات، وتبقى ملفات المصدر المتبقية في مكانها.</translation></message>
+    <message><source>This operation can be retried; cancelling it here is not supported.</source><translation>يمكن إعادة محاولة الاسترداد لهذه العملية، لكن إلغاءها هنا غير مدعوم.</translation></message>
+    <message><source>Retry recovery</source><translation>إعادة محاولة الاسترداد</translation></message>
+    <message><source>Cancel remaining moves</source><translation>إلغاء النقل المتبقي</translation></message>
+    <message><source>The operation could not be started. Its record was kept.</source><translation>تعذر بدء العملية. تم الاحتفاظ بسجلها.</translation></message>
+</context>
 </TS>

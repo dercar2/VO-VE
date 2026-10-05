@@ -1,7 +1,7 @@
-# VO-VE 0.2.21 Distribution
+# VO-VE 0.2.22 Distribution
 
-Application source commit: c4a75845df10a61cfcd969e3d6097257a82e55dc.
-Build label: GIF-RELEASE-20260927.
+Application source commit: 02b7f4f387a2dae7ae437642b3ada611dc17381e.
+Build label: TRASH-RECOVERY-20261005.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 The application snapshot is in Source/ in this release tag's automatic ZIP and TAR.GZ archives.

@@ -48,6 +48,8 @@ struct TrashSecurityResult {
 
 [[nodiscard]] bool validate_preserved_trash_security(const std::string &sddl_utf8,
                                                     std::string &detail_utf8);
+// Exact owner/group/control; only simple file allow ACE order and INHERITED_ACE may differ.
+// Hardened vault/payload verification continues to require an exact ACL representation.
 [[nodiscard]] bool verify_preserved_trash_security_handle(void *handle,
                                                          const std::string &sddl_utf8,
                                                          std::string &detail_utf8);
