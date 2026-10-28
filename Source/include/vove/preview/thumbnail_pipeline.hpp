@@ -13,7 +13,7 @@
 namespace vove::preview {
 
 inline constexpr std::string_view kRasterThumbnailHandlerId = "raster.qt";
-inline constexpr std::uint32_t kRasterThumbnailHandlerVersion = 6;
+inline constexpr std::uint32_t kRasterThumbnailHandlerVersion = 7;
 inline constexpr std::string_view kPsdCompositeHandlerId = "raster.psd.composite";
 inline constexpr std::uint32_t kPsdCompositeHandlerVersion = 2;
 inline constexpr std::string_view kRawEmbeddedPreviewHandlerId = "raster.raw.embedded-preview";
@@ -42,7 +42,8 @@ inline constexpr std::string_view kDxfEmbeddedPreviewHandlerId = "document.dxf.e
 inline constexpr std::uint32_t kDxfEmbeddedPreviewHandlerVersion = 1;
 inline constexpr std::uint32_t kThumbnailRenderPolicyVersion = 1;
 inline constexpr std::uint32_t kThumbnailColorPolicyVersion = 1;
-inline constexpr std::uint32_t kThumbnailRoutingPolicyVersion = 1;
+// Offline locators omit handler identity; retire aliases with legacy raster page counts too.
+inline constexpr std::uint32_t kThumbnailRoutingPolicyVersion = 2;
 
 enum class ThumbnailPipelineStatus : std::uint8_t {
     success,

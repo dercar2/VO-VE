@@ -356,10 +356,6 @@ bool StagingWrite::valid() const noexcept {
     return file_ != nullptr && !error_;
 }
 
-std::size_t StagingWrite::bytes_written() const noexcept {
-    return bytes_written_;
-}
-
 std::intptr_t StagingWrite::native_object() const noexcept {
     if (file_ == nullptr) {
         return static_cast<std::intptr_t>(-1);

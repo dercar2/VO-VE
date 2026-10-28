@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(VO_VE VERSION 0.2.22 LANGUAGES C CXX)
+project(VO_VE VERSION 1.0.0 LANGUAGES C CXX)
 
 option(VOVE_BUILD_TESTS "Build headless core tests" ON)
 option(VOVE_BUILD_BENCHMARKS "Build headless benchmarks" ON)
@@ -869,7 +869,7 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     add_test(NAME vove-rgba-scaler-tests COMMAND vove-rgba-scaler-tests)
 
     add_executable(vove-thumbnail-pipeline-tests tests/preview/thumbnail_pipeline_test.cpp)
-    target_link_libraries(vove-thumbnail-pipeline-tests PRIVATE vove::preview_pipeline)
+    target_link_libraries(vove-thumbnail-pipeline-tests PRIVATE vove::preview_pipeline vove-sqlite)
     vove_enable_warnings(vove-thumbnail-pipeline-tests)
     if(MINGW)
         target_link_options(vove-thumbnail-pipeline-tests PRIVATE -static)

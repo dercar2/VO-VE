@@ -777,7 +777,7 @@ struct EncodedThumbnail {
             .color_profile_utf8 = std::move(thumbnail.color_profile),
             .source_profile_fingerprint = std::move(thumbnail.source_profile_fingerprint),
             .page_index = 0,
-            .page_count = std::max(1U, thumbnail.page_count),
+            .page_count = 1,
             .bytes_written = encoded.bytes.size(),
             .diagnostic_utf8 = {}};
 }
@@ -847,6 +847,10 @@ WorkerResult execute_gif_animation_native(const NativeJobIo io, const WorkerJob 
 }
 
 WorkerResult execute_raster_job_native(const NativeJobIo io, const WorkerJob &job) {
+    if (job.page_index != 0) {
+        return failure(job, ResultStatus::unsupported,
+                       "raster preview exposes only the first saved view");
+    }
 #ifdef _WIN32
     const auto platform_source_limit = job.source_format_hint == SourceFormatHint::camera_raw
                                            ? handlers::raster::kMaximumRawSourceBytes

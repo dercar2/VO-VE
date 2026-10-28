@@ -141,7 +141,7 @@ AboutDialog::AboutDialog(const QString &version, QWidget *parent) : QDialog(pare
     const auto repository_link = link(repository_url.toString(QUrl::FullyEncoded),
                                       QStringLiteral("github.com/dercar2/VO-VE"));
     html += QStringLiteral(
-                "</ol><p>%1: %2<br>GitHub: %3</p><p>%4: %5<br>%6: release Alfa<br>%7: %8</p>")
+                "</ol><p>%1: %2<br>GitHub: %3</p><p>%4: %5<br>%6: Beta<br>%7: %8</p>")
                 .arg(about_text(QT_TRANSLATE_NOOP("AboutDialog", "Website")),
                      link(QStringLiteral("https://vo-ve.ru"), QStringLiteral("vo-ve.ru")),
                      repository_link, ui_text(UiTextId::version).toHtmlEscaped(),

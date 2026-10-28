@@ -531,10 +531,11 @@ int run(const SearchRequest &request) {
         if (output_failed) {
             return 4;
         }
-        if (provider.stopped_early && accepted < request.maximum_results) {
+        if (provider.stopped_early) {
             truncated = true;
         }
-        if (truncated || accepted >= request.maximum_results) {
+        // An exact fit in one root does not establish whether later roots have more matches.
+        if (truncated) {
             break;
         }
     }

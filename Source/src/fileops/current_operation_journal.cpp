@@ -74,7 +74,7 @@ CurrentOperationJournalStore::write(const CurrentOperationKind kind,
 }
 
 CurrentOperationJournalReadResult CurrentOperationJournalStore::read() const {
-    const auto stored = durable_.read();
+    auto stored = durable_.read();
     CurrentOperationJournalReadResult result;
     result.status = stored.status;
     result.error = stored.error;
@@ -96,7 +96,7 @@ CurrentOperationJournalReadResult CurrentOperationJournalStore::read() const {
             return result;
         }
         result.encoding = CurrentOperationJournalEncoding::legacy_untyped;
-        result.payload = stored.payload;
+        result.payload = std::move(stored.payload);
         return result;
     }
 

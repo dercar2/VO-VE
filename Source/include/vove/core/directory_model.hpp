@@ -48,7 +48,6 @@ class DirectoryModel {
 
     void set_filter_key(std::string filter_key_utf8);
     void set_sort(SortField field, SortDirection direction);
-    void set_sort_field(SortField field);
     void set_sort_direction(SortDirection direction);
     void set_filter_case(FilterCase filter_case);
 
@@ -56,6 +55,7 @@ class DirectoryModel {
     [[nodiscard]] bool loading() const noexcept;
     [[nodiscard]] std::size_t total_size() const noexcept;
     [[nodiscard]] std::size_t visible_size() const noexcept;
+    [[nodiscard]] std::size_t visible_directories() const noexcept;
     [[nodiscard]] const DirectoryEntry &visible_at(std::size_t index) const;
     [[nodiscard]] const std::vector<DirectoryEntry> &entries() const noexcept;
     [[nodiscard]] const std::vector<std::size_t> &visible_indices() const noexcept;
@@ -79,6 +79,7 @@ class DirectoryModel {
     FilterCase filter_case_{FilterCase::insensitive};
     std::vector<DirectoryEntry> entries_;
     std::vector<std::size_t> visible_indices_;
+    std::size_t visible_directories_{};
 };
 
 // The production key performs deterministic Unicode NFKC case folding without

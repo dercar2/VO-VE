@@ -247,10 +247,13 @@ void DirectoryListModel::append_catalog(std::vector<core::DirectoryEntry> entrie
     if (!model_.append_batch(generation_, entries)) {
         qFatal("DirectoryListModel rejected its current catalog generation");
     }
-    rebuild_row_index();
     if (resets_existing_file_rows) {
+        rebuild_row_index();
         endResetModel();
     } else if (matching != 0) {
+        for (auto row = first; row < rowCount(); ++row) {
+            rowsById_.insert(static_cast<qulonglong>(model_.visible_at(static_cast<std::size_t>(row)).id), row);
+        }
         endInsertRows();
     }
 }
@@ -584,13 +587,7 @@ std::size_t DirectoryListModel::visible_size() const noexcept {
 }
 
 std::size_t DirectoryListModel::visible_directories() const noexcept {
-    std::size_t count{};
-    for (std::size_t index = 0; index < model_.visible_size(); ++index) {
-        if (model_.visible_at(index).kind == core::EntryKind::directory) {
-            ++count;
-        }
-    }
-    return count;
+    return model_.visible_directories();
 }
 
 std::size_t DirectoryListModel::visible_files() const noexcept {
@@ -633,14 +630,9 @@ QHash<qulonglong, int> DirectoryListModel::rows_for_ids(const QSet<qulonglong> &
     if (ids.isEmpty()) {
         return result;
     }
-    for (std::size_t row = 0; row < model_.visible_size(); ++row) {
-        const auto id = static_cast<qulonglong>(model_.visible_at(row).id);
-        if (ids.contains(id)) {
-            result.insert(id, static_cast<int>(row));
-            if (result.size() == ids.size()) {
-                break;
-            }
-        }
+    for (const auto id : ids) {
+        const auto row = row_for_id(id);
+        if (row >= 0) result.insert(id, row);
     }
     return result;
 }

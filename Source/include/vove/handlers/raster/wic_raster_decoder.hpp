@@ -69,7 +69,7 @@ struct WicRasterMetadata {
     RasterFormat format{RasterFormat::Unknown};
     std::uint32_t source_width{};
     std::uint32_t source_height{};
-    std::optional<std::uint32_t> page_count;
+    std::optional<std::uint32_t> page_count; // One exposed still view, not the container frame count.
     std::uint16_t exif_orientation{1};
     std::string color_summary;
     std::string source_profile_fingerprint;

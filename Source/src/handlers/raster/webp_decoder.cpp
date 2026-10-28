@@ -452,7 +452,7 @@ transform_color(std::vector<std::byte> &rgba, const std::uint32_t width, const s
 
     WebpMetadata metadata{.source_width = canvas_width,
                           .source_height = canvas_height,
-                          .page_count = frame_count,
+                          .page_count = 1,
                           .source_color_model = {},
                           .source_color_profile = {},
                           .source_profile_fingerprint = {},

@@ -113,6 +113,7 @@ DirectoryModel::Generation DirectoryModel::begin_generation() {
     loading_ = true;
     entries_.clear();
     visible_indices_.clear();
+    visible_directories_ = 0;
     return generation_;
 }
 
@@ -142,8 +143,6 @@ bool DirectoryModel::append_batch(const Generation generation,
         return false;
     }
 
-    entries_.reserve(entries_.size() + entries.size());
-    visible_indices_.reserve(visible_indices_.size() + entries.size());
     auto last_group = visible_indices_.empty() ? CatalogGroup::directory
                                                : catalog_group(entries_[visible_indices_.back()]);
     bool regroup{};
@@ -154,6 +153,7 @@ bool DirectoryModel::append_batch(const Generation generation,
         entries_.push_back(entry);
         if (matches_filter(entries_.back())) {
             visible_indices_.push_back(entries_.size() - 1);
+            visible_directories_ += entry.kind == EntryKind::directory ? 1U : 0U;
             const auto group = catalog_group(entry);
             regroup = regroup || group < last_group;
             last_group = group;
@@ -174,10 +174,12 @@ bool DirectoryModel::replace_generation(const Generation generation,
                   [](const DirectoryEntry &entry) { return !visible_in_preview_catalog(entry); });
     entries_ = std::move(entries);
     visible_indices_.clear();
+    visible_directories_ = 0;
     visible_indices_.reserve(entries_.size());
     for (std::size_t index = 0; index < entries_.size(); ++index) {
         if (matches_filter(entries_[index])) {
             visible_indices_.push_back(index);
+            visible_directories_ += entries_[index].kind == EntryKind::directory ? 1U : 0U;
         }
     }
     partition_visible_groups();
@@ -228,16 +230,6 @@ void DirectoryModel::set_sort(const SortField field, const SortDirection directi
     }
 }
 
-void DirectoryModel::set_sort_field(const SortField field) {
-    if (sort_field_ == field) {
-        return;
-    }
-    sort_field_ = field;
-    if (!loading_) {
-        sort_visible_indices();
-    }
-}
-
 void DirectoryModel::set_sort_direction(const SortDirection direction) {
     if (sort_direction_ == direction) {
         return;
@@ -262,6 +254,10 @@ std::size_t DirectoryModel::total_size() const noexcept {
 
 std::size_t DirectoryModel::visible_size() const noexcept {
     return visible_indices_.size();
+}
+
+std::size_t DirectoryModel::visible_directories() const noexcept {
+    return visible_directories_;
 }
 
 const DirectoryEntry &DirectoryModel::visible_at(const std::size_t index) const {
@@ -307,10 +303,12 @@ bool DirectoryModel::matches_filter(const DirectoryEntry &entry) const noexcept 
 
 void DirectoryModel::rebuild_visible_indices() {
     visible_indices_.clear();
+    visible_directories_ = 0;
     visible_indices_.reserve(entries_.size());
     for (std::size_t index = 0; index < entries_.size(); ++index) {
         if (matches_filter(entries_[index])) {
             visible_indices_.push_back(index);
+            visible_directories_ += entries_[index].kind == EntryKind::directory ? 1U : 0U;
         }
     }
     if (loading_) {

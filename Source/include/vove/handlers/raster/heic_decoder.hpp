@@ -58,7 +58,7 @@ enum class HeicColorModel : std::uint8_t {
 struct HeicMetadata {
     std::uint32_t source_width{};
     std::uint32_t source_height{};
-    std::uint32_t page_count{};
+    std::uint32_t page_count{}; // One exposed primary view, not the container image count.
     HeicColorModel source_color_model{HeicColorModel::unknown};
     std::string source_color_profile;
     std::string source_profile_fingerprint;

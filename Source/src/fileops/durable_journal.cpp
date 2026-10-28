@@ -905,16 +905,16 @@ DurableJournalResult DurableJournalStore::write(const std::span<const std::byte>
 }
 
 DurableJournalReadResult DurableJournalStore::read() const {
-    const auto primary = inspect(primary_path_, maximum_payload_bytes_);
+    auto primary = inspect(primary_path_, maximum_payload_bytes_);
     if (primary.status == InspectionStatus::valid) {
         DurableJournalReadResult result;
         result.status = DurableJournalStatus::success;
         result.source = DurableJournalReadSource::primary;
-        result.payload = primary.payload;
+        result.payload = std::move(primary.payload);
         return result;
     }
 #ifndef _WIN32
-    const auto primary_claim =
+    auto primary_claim =
         primary.status == InspectionStatus::missing
             ? inspect(removal_claim_path(primary_path_), maximum_payload_bytes_)
             : InspectionResult{.status = InspectionStatus::missing, .payload = {}, .error = {}};
@@ -922,21 +922,21 @@ DurableJournalReadResult DurableJournalStore::read() const {
         DurableJournalReadResult result;
         result.status = DurableJournalStatus::success;
         result.source = DurableJournalReadSource::primary;
-        result.payload = primary_claim.payload;
+        result.payload = std::move(primary_claim.payload);
         return result;
     }
 #endif
 
-    const auto previous = inspect(previous_path_, maximum_payload_bytes_);
+    auto previous = inspect(previous_path_, maximum_payload_bytes_);
     if (previous.status == InspectionStatus::valid) {
         DurableJournalReadResult result;
         result.status = DurableJournalStatus::success;
         result.source = DurableJournalReadSource::previous;
-        result.payload = previous.payload;
+        result.payload = std::move(previous.payload);
         return result;
     }
 #ifndef _WIN32
-    const auto previous_claim =
+    auto previous_claim =
         previous.status == InspectionStatus::missing
             ? inspect(removal_claim_path(previous_path_), maximum_payload_bytes_)
             : InspectionResult{.status = InspectionStatus::missing, .payload = {}, .error = {}};
@@ -944,7 +944,7 @@ DurableJournalReadResult DurableJournalStore::read() const {
         DurableJournalReadResult result;
         result.status = DurableJournalStatus::success;
         result.source = DurableJournalReadSource::previous;
-        result.payload = previous_claim.payload;
+        result.payload = std::move(previous_claim.payload);
         return result;
     }
 #endif

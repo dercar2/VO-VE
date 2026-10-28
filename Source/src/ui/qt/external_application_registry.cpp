@@ -8,6 +8,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <utility>
 
 namespace vove::ui {
 namespace {
@@ -39,12 +40,13 @@ constexpr qsizetype maximumIconBytes = static_cast<qsizetype>(256) * 1024;
 }
 
 [[nodiscard]] QString normalized_name(QString name, const QString &path,
-                                      const ExternalApplicationKind kind) {
+                                      const ExternalApplicationKind kind,
+                                      const bool read_desktop_name = true) {
     name.replace(QLatin1Char('\n'), QLatin1Char(' '));
     name.replace(QLatin1Char('\r'), QLatin1Char(' '));
     name.replace(QLatin1Char('\t'), QLatin1Char(' '));
     name = name.simplified().left(128);
-    if (name.isEmpty() && kind == ExternalApplicationKind::desktop_entry) {
+    if (name.isEmpty() && read_desktop_name && kind == ExternalApplicationKind::desktop_entry) {
         name = desktop_entry_name(path).simplified().left(128);
     }
     if (name.isEmpty()) {
@@ -150,6 +152,28 @@ void ExternalApplicationRegistry::save(QSettings &settings) const {
         settings.setValue(QStringLiteral("iconPng"), applications_.at(index).icon_png);
     }
     settings.endArray();
+}
+
+void ExternalApplicationRegistry::restore_loaded_data(QList<ExternalApplication> applications) {
+    applications_.clear();
+    const auto count = std::min(applications.size(), maximumApplications);
+    for (qsizetype index{}; index < count; ++index) {
+        auto &application = applications[index];
+        if ((application.kind != ExternalApplicationKind::executable &&
+             application.kind != ExternalApplicationKind::desktop_entry) ||
+            application.path.contains(QChar::Null)) continue;
+        const auto path = structural_application_path(application.path, application.kind);
+        if (path.isEmpty()) continue;
+        const auto key = comparison_key(path);
+        if (std::ranges::any_of(applications_, [&](const auto &existing) {
+                return comparison_key(existing.path) == key;
+            })) continue;
+        applications_.push_back({.kind = application.kind,
+                                 .name = normalized_name(std::move(application.name), path,
+                                                         application.kind, false),
+                                 .path = path,
+                                 .icon_png = normalized_icon(std::move(application.icon_png))});
+    }
 }
 
 AddExternalApplicationResult

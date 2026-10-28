@@ -59,7 +59,7 @@ struct QtRasterMetadata {
     RasterFormat format{RasterFormat::Unknown};
     std::uint32_t source_width{};
     std::uint32_t source_height{};
-    std::optional<std::uint32_t> page_count;
+    std::optional<std::uint32_t> page_count; // One exposed still view, not the container frame count.
     QColorSpace source_color_space;
     QColorSpace output_color_space;
     QString color_summary;

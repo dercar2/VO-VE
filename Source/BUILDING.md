@@ -1,7 +1,7 @@
 # Building VO-VE
 
-Generated from clean tracked WORK at commit 02b7f4f387a2dae7ae437642b3ada611dc17381e.
-Build label: TRASH-RECOVERY-20261005
+Generated from clean tracked WORK at commit 34b955569a617e1422a9bfe66ebeb13f214fa252.
+Build label: BETA-20261028
 In the public tag archive, this snapshot is the Source/ directory beside Site/.
 See PUBLIC-DISTRIBUTION.md (added during release assembly) for pinned supplement URLs
 and SHA-256 digests. LICENSE, THIRD_PARTY_NOTES.md and dependency notices accompany the source.

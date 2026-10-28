@@ -491,7 +491,7 @@ class Service::Impl final {
         response.request_id = request.request_id;
         response.page_index = request.page_index;
         try {
-            const auto result = pipeline_.fetch(
+            auto result = pipeline_.fetch(
                 {.source = {.source_identity_utf8 = request.path_utf8,
                             .size_bytes = request.source_size,
                             .modified_unix_ns = request.modified_unix_ns,
@@ -524,10 +524,14 @@ class Service::Impl final {
                 response.provenance = map_provenance(result.provenance);
                 response.page_index = result.page_index;
                 response.page_count = result.page_count;
-                response.rgba8 = result.rgba8;
+                response.rgba8 = std::move(result.rgba8);
             }
             if (result.ok() && !result.from_cache && ++published_since_prune_ >= 32) {
-                record_cache_maintenance(cache_.prune(options_.disk_cache_limits, false));
+                try {
+                    record_cache_maintenance(cache_.prune(options_.disk_cache_limits, false));
+                } catch (const std::exception &error) {
+                    cache_maintenance_error_ = error.what();
+                }
                 published_since_prune_ = 0;
             }
         } catch (...) {

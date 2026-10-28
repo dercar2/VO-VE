@@ -30,6 +30,9 @@ class ExternalApplicationRegistry final {
   public:
     void load(QSettings &settings);
     void save(QSettings &settings) const;
+    // Restore preference records without checking availability or reading any files/settings.
+    // Retains unavailable apps; applies only structural normalization, deduplication and bounds.
+    void restore_loaded_data(QList<ExternalApplication> applications);
 
     [[nodiscard]] AddExternalApplicationResult add(const ExternalApplication &application);
     [[nodiscard]] bool remove(const QString &path);

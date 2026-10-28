@@ -43,6 +43,10 @@ GlobalSearchClient::GlobalSearchClient(QObject *owner, QString helper_override,
     timeout_->setSingleShot(true);
     timeout_->setInterval(static_cast<int>(std::clamp<std::int64_t>(
         inactivity_timeout.count(), 100, std::numeric_limits<int>::max())));
+    exitTimeout_ = new QTimer(owner_);
+    exitTimeout_->setSingleShot(true);
+    exitTimeout_->setInterval(1'000);
+    QObject::connect(exitTimeout_, &QTimer::timeout, owner_, [this] { complete_current(); });
     QObject::connect(timeout_, &QTimer::timeout, owner_, [this] {
         if (active()) {
             fail_current(search::SearchStatus::timed_out,
@@ -55,6 +59,8 @@ GlobalSearchClient::~GlobalSearchClient() {
     cancel();
     delete timeout_;
     timeout_ = nullptr;
+    delete exitTimeout_;
+    exitTimeout_ = nullptr;
 }
 
 void GlobalSearchClient::set_reply_handler(ReplyHandler handler) {
@@ -119,14 +125,17 @@ std::uint64_t GlobalSearchClient::start(const QString &query, const QStringList 
                      [this, process, generation](QProcess::ProcessError) {
                          process_failed(process, generation);
                      });
+    timeout_->start();
     process->start(helper_path(), {});
     return generation;
 }
 
 void GlobalSearchClient::cancel() {
     timeout_->stop();
+    exitTimeout_->stop();
     activeGeneration_ = 0;
     finalSeen_ = false;
+    finalBatch_.reset();
     incoming_.clear();
     requestFrame_.clear();
     allowedRoots_.clear();
@@ -134,15 +143,40 @@ void GlobalSearchClient::cancel() {
         return;
     }
     auto *process = std::exchange(process_, nullptr);
-    QObject::disconnect(process, nullptr, owner_, nullptr);
-    if (process->state() != QProcess::NotRunning) {
-        process->kill();
-    }
-    process->deleteLater();
+    retire_process(process);
 }
 
 bool GlobalSearchClient::active() const noexcept {
-    return process_ != nullptr && activeGeneration_ != 0 && !finalSeen_;
+    return process_ != nullptr && activeGeneration_ != 0;
+}
+
+void GlobalSearchClient::retire_process(QProcess *process) {
+    QObject::disconnect(process, nullptr, owner_, nullptr);
+    if (process->state() == QProcess::NotRunning) {
+        process->deleteLater();
+        return;
+    }
+    QObject::connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), process,
+                     &QObject::deleteLater);
+    QObject::connect(process, &QProcess::errorOccurred, process, [process](auto error) {
+        if (error == QProcess::FailedToStart) {
+            process->deleteLater();
+        }
+    });
+    process->kill();
+}
+
+void GlobalSearchClient::complete_current() {
+    if (!finalBatch_) {
+        return;
+    }
+    consume_output(process_, activeGeneration_);
+    if (!finalBatch_) {
+        return;
+    }
+    auto batch = std::move(*finalBatch_);
+    cancel();
+    deliver(std::move(batch));
 }
 
 void GlobalSearchClient::consume_output(QProcess *process, const std::uint64_t generation) {
@@ -150,7 +184,14 @@ void GlobalSearchClient::consume_output(QProcess *process, const std::uint64_t g
         return;
     }
     incoming_.append(process->readAllStandardOutput());
-    timeout_->start();
+    if (!finalSeen_) {
+        timeout_->start();
+    }
+    if (finalSeen_ && !incoming_.isEmpty()) {
+        fail_current(search::SearchStatus::io_error,
+                     QStringLiteral("search helper returned output after its final result"));
+        return;
+    }
     while (incoming_.size() >= static_cast<qsizetype>(search::protocol::kSearchFrameHeaderBytes)) {
         std::size_t payload_size{};
         std::string error;
@@ -194,8 +235,18 @@ void GlobalSearchClient::consume_output(QProcess *process, const std::uint64_t g
         if (batch.is_final) {
             finalSeen_ = true;
             timeout_->stop();
+            finalBatch_ = std::move(batch);
+            exitTimeout_->start();
+            if (!incoming_.isEmpty()) {
+                fail_current(search::SearchStatus::io_error,
+                             QStringLiteral("search helper returned output after its final result"));
+            }
+            return;
         }
         deliver(std::move(batch));
+        if (process_ != process || activeGeneration_ != generation) {
+            return;
+        }
     }
 }
 
@@ -216,14 +267,18 @@ void GlobalSearchClient::process_finished(QProcess *process, const std::uint64_t
                          : QStringLiteral("search helper returned a partial frame"));
         return;
     }
-    timeout_->stop();
-    process_ = nullptr;
-    activeGeneration_ = 0;
-    process->deleteLater();
+    complete_current();
 }
 
 void GlobalSearchClient::process_failed(QProcess *process, const std::uint64_t generation) {
-    if (process_ != process || activeGeneration_ != generation || finalSeen_) {
+    if (process_ != process || activeGeneration_ != generation) {
+        return;
+    }
+    if (finalSeen_) {
+        consume_output(process, generation);
+        if (process_ == process && activeGeneration_ == generation) {
+            complete_current();
+        }
         return;
     }
     const auto status = process->error() == QProcess::FailedToStart
@@ -240,14 +295,12 @@ void GlobalSearchClient::fail_current(const search::SearchStatus status, const Q
     auto *process = std::exchange(process_, nullptr);
     activeGeneration_ = 0;
     finalSeen_ = true;
+    finalBatch_.reset();
     timeout_->stop();
+    exitTimeout_->stop();
     incoming_.clear();
     if (process != nullptr) {
-        QObject::disconnect(process, nullptr, owner_, nullptr);
-        if (process->state() != QProcess::NotRunning) {
-            process->kill();
-        }
-        process->deleteLater();
+        retire_process(process);
     }
     search::SearchBatch batch;
     batch.generation = generation;

@@ -53,7 +53,7 @@ struct WebpDecodeLimits {
 struct WebpMetadata {
     std::uint32_t source_width{};
     std::uint32_t source_height{};
-    std::uint32_t page_count{};
+    std::uint32_t page_count{}; // One exposed still view, not the animation frame count.
     std::string source_color_model;
     std::string source_color_profile;
     std::string source_profile_fingerprint;

@@ -42,7 +42,6 @@ class StagingWrite {
 
     [[nodiscard]] bool write(std::span<const std::byte> bytes);
     [[nodiscard]] bool valid() const noexcept;
-    [[nodiscard]] std::size_t bytes_written() const noexcept;
     [[nodiscard]] std::intptr_t native_object() const noexcept;
     [[nodiscard]] const std::filesystem::path &path() const noexcept;
     [[nodiscard]] const StoreError &error() const noexcept;

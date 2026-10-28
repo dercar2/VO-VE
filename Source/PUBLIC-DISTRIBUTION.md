@@ -1,7 +1,7 @@
-# VO-VE 0.2.22 Distribution
+# VO-VE 1.0.0 Distribution
 
-Application source commit: 02b7f4f387a2dae7ae437642b3ada611dc17381e.
-Build label: TRASH-RECOVERY-20261005.
+Application source commit: 34b955569a617e1422a9bfe66ebeb13f214fa252.
+Build label: BETA-20261028.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 The application snapshot is in Source/ in this release tag's automatic ZIP and TAR.GZ archives.

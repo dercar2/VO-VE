@@ -35,15 +35,16 @@ struct MaterializeOptions {
     PreviewFreshness freshness{PreviewFreshness::verified};
 };
 
-[[nodiscard]] ThumbnailPipelineResult materialize(const cache::ArtifactData &artifact,
-                                                  const MaterializeOptions options) {
-    auto decoded = cache::decode_qoi_rgba8(artifact.payload);
+[[nodiscard]] ThumbnailPipelineResult
+materialize(const cache::ArtifactData &artifact, const MaterializeOptions options,
+            std::optional<cache::QoiDecodeResult> validated = {}) {
+    auto decoded = validated ? std::move(*validated) : cache::decode_qoi_rgba8(artifact.payload);
     if (!decoded.ok() || decoded.width != artifact.metadata.width ||
         decoded.height != artifact.metadata.height) {
         return failure(ThumbnailPipelineStatus::internal_error,
                        decoded.error.empty() ? "cached QOI dimensions do not match metadata"
                                              : decoded.error,
-                       options.from_cache);
+                       options.from_cache, options.freshness);
     }
     auto width = decoded.width;
     auto height = decoded.height;
@@ -52,7 +53,7 @@ struct MaterializeOptions {
         auto scaled = scale_rgba8_to_edge(pixels, width, height, options.presentation_edge);
         if (!scaled.ok()) {
             return failure(ThumbnailPipelineStatus::internal_error, std::move(scaled.error),
-                           options.from_cache);
+                           options.from_cache, options.freshness);
         }
         width = scaled.width;
         height = scaled.height;
@@ -71,6 +72,20 @@ struct MaterializeOptions {
             .diagnostic = {},
             .from_cache = options.from_cache,
             .freshness = options.freshness};
+}
+
+void cache_save_failed(ThumbnailPipelineResult &result, std::string diagnostic) {
+    result.from_cache = false;
+    result.diagnostic =
+        diagnostic.empty() ? "preview cache persistence failed" : std::move(diagnostic);
+}
+
+void revoke_locator_tiers(cache::PersistentThumbnailCache &cache, cache::CacheLocatorKey locator) {
+    for (auto edge = cache::kThumbnailCanonicalEdge; edge <= cache::kMaxArtifactDimension;
+         edge *= 2U) {
+        locator.canonical_edge = edge;
+        static_cast<void>(cache.erase_locator(locator));
+    }
 }
 
 [[nodiscard]] bool permits_offline_fallback(const ThumbnailPipelineStatus status) noexcept {
@@ -137,14 +152,7 @@ ThumbnailPipelineResult ThumbnailPipeline::fetch(const ThumbnailPipelineRequest 
         }
     }
     auto locator = make_cache_locator(resolved_request);
-    const auto revoke_locators = [&] {
-        auto revoked = locator;
-        for (auto edge = cache::kThumbnailCanonicalEdge; edge <= cache::kMaxArtifactDimension;
-             edge *= 2U) {
-            revoked.canonical_edge = edge;
-            static_cast<void>(cache_.erase_locator(revoked));
-        }
-    };
+    const auto revoke_locators = [&] { revoke_locator_tiers(cache_, locator); };
     const auto materialize_offline = [&]() -> ThumbnailPipelineResult {
         auto offline_locator = locator;
         auto cached = cache_.lookup_locator(offline_locator, request.access_unix_ns);
@@ -174,7 +182,8 @@ ThumbnailPipelineResult ThumbnailPipeline::fetch(const ThumbnailPipelineRequest 
                                   {.presentation_edge = request.canonical_edge,
                                    .page_index = request.page_index,
                                    .from_cache = true,
-                                   .freshness = PreviewFreshness::offline_unverified});
+                                   .freshness = PreviewFreshness::offline_unverified},
+                                  std::move(cached.thumbnail->decoded));
         if (!result.ok()) {
             static_cast<void>(cache_.erase_locator(offline_locator));
         }
@@ -226,41 +235,47 @@ ThumbnailPipelineResult ThumbnailPipeline::fetch(const ThumbnailPipelineRequest 
         for (auto edge = cache::kThumbnailCanonicalEdge; edge < key.canonical_edge; edge *= 2U) {
             auto scaled = scale_rgba8_to_edge(result.rgba8, result.width, result.height, edge);
             if (!scaled.ok()) {
-                return failure(ThumbnailPipelineStatus::internal_error, std::move(scaled.error));
+                revoke_locators();
+                cache_save_failed(result, std::move(scaled.error));
+                break;
             }
             auto encoded = cache::encode_qoi_rgba8(scaled.rgba8, scaled.width, scaled.height,
                                                    static_cast<std::size_t>(scaled.width) * 4U);
             if (!encoded.ok()) {
-                return failure(ThumbnailPipelineStatus::internal_error, std::move(encoded.error));
+                revoke_locators();
+                cache_save_failed(result, std::move(encoded.error));
+                break;
             }
             auto canonical_key = key;
             canonical_key.canonical_edge = edge;
             auto canonical_locator = locator;
             canonical_locator.canonical_edge = edge;
-            const auto published = cache_.publish(
-                {.key = canonical_key,
-                 .metadata = {.encoding = cache::ArtifactEncoding::qoi_rgba8,
-                              .width = scaled.width,
-                              .height = scaled.height,
-                              .payload_bytes = 0,
-                              .payload_crc32 = 0,
-                              .page_count = result.page_count,
-                              .source_color_model = result.source_color_model,
-                              .provenance = result.provenance},
-                 .payload = encoded.bytes,
-                 .source_profile_name = result.source_profile_name,
-                 .source_profile_fingerprint = result.source_profile_fingerprint,
-                 .access_unix_ns = resolved_request.access_unix_ns});
+            const auto published =
+                cache_.publish({.key = canonical_key,
+                                .metadata = {.encoding = cache::ArtifactEncoding::qoi_rgba8,
+                                             .width = scaled.width,
+                                             .height = scaled.height,
+                                             .payload_bytes = 0,
+                                             .payload_crc32 = 0,
+                                             .page_count = result.page_count,
+                                             .source_color_model = result.source_color_model,
+                                             .provenance = result.provenance},
+                                .payload = encoded.bytes,
+                                .source_profile_name = result.source_profile_name,
+                                .source_profile_fingerprint = result.source_profile_fingerprint,
+                                .access_unix_ns = resolved_request.access_unix_ns});
             if (!published.published || !published.index_published ||
                 !cache_.bind_locator(canonical_locator, canonical_key)) {
-                return failure(ThumbnailPipelineStatus::internal_error,
-                               published.error.empty() ? "canonical thumbnail publication failed"
-                                                       : published.error);
+                revoke_locators();
+                cache_save_failed(result, published.error.empty()
+                                              ? "canonical thumbnail publication failed"
+                                              : published.error);
+                break;
             }
         }
         return result;
     };
-    const auto cached = cache_.lookup(key, resolved_request.access_unix_ns);
+    auto cached = cache_.lookup(key, resolved_request.access_unix_ns);
     if (cached.kind == cache::CacheLookupKind::memory_hit ||
         cached.kind == cache::CacheLookupKind::disk_hit) {
         if (!cached.thumbnail || !cached.thumbnail->artifact) {
@@ -270,18 +285,18 @@ ThumbnailPipelineResult ThumbnailPipeline::fetch(const ThumbnailPipelineRequest 
         auto result = materialize(*cached.thumbnail->artifact,
                                   {.presentation_edge = resolved_request.canonical_edge,
                                    .page_index = resolved_request.page_index,
-                                   .from_cache = true});
+                                   .from_cache = true},
+                                  std::move(cached.thumbnail->decoded));
         if (result.ok()) {
-            if (!cache_.bind_locator(locator, key)) {
-                return failure(ThumbnailPipelineStatus::internal_error,
-                               "thumbnail cache locator publication failed");
+            if (!cached.thumbnail->index_record || !cache_.bind_locator(locator, key)) {
+                revoke_locators();
+                cache_save_failed(result, cached.error.empty()
+                                              ? "thumbnail cache locator publication failed"
+                                              : std::move(cached.error));
             }
             return finish(std::move(result));
         }
         static_cast<void>(cache_.erase(key));
-    } else if (cached.kind == cache::CacheLookupKind::error) {
-        return failure(ThumbnailPipelineStatus::internal_error,
-                       cached.error.empty() ? "thumbnail cache lookup failed" : cached.error);
     }
     auto rendered = render_and_publish(resolved_request, key, locator, true);
     if (revokes_offline_locator(rendered.status)) {
@@ -308,58 +323,58 @@ ThumbnailPipelineResult ThumbnailPipeline::render_and_publish(
         return result;
     }
 
-    auto decoded = cache::decode_qoi_rgba8(rendered.qoi_payload);
-    if (!decoded.ok() || decoded.width != rendered.metadata.width ||
-        decoded.height != rendered.metadata.height || rendered.metadata.page_count == 0) {
+    if (rendered.metadata.encoding != cache::ArtifactEncoding::qoi_rgba8 ||
+        rendered.metadata.page_count == 0 ||
+        rendered.metadata.page_count > cache::kMaxArtifactPageCount ||
+        rendered.metadata.source_color_model > cache::ColorModel::indexed ||
+        rendered.metadata.provenance > cache::PreviewProvenance::embedded_preview) {
         return failure(ThumbnailPipelineStatus::internal_error,
-                       decoded.error.empty() ? "renderer returned inconsistent metadata"
-                                             : decoded.error);
+                       "renderer returned inconsistent metadata");
     }
 
+    std::optional<cache::QoiDecodeResult> decoded;
+    std::string persistence_error;
     if (allow_persistent_cache) {
-        const auto published =
+        auto published =
             cache_.publish({.key = key,
                             .metadata = rendered.metadata,
                             .payload = rendered.qoi_payload,
                             .source_profile_name = rendered.source_profile_name,
                             .source_profile_fingerprint = rendered.source_profile_fingerprint,
                             .access_unix_ns = request.access_unix_ns});
+        decoded = std::move(published.decoded);
         if (!published.published || !published.index_published) {
-            return failure(ThumbnailPipelineStatus::internal_error,
-                           published.error.empty() ? "thumbnail cache publication failed"
-                                                   : published.error);
+            persistence_error = published.error.empty() ? "thumbnail cache publication failed"
+                                                        : std::move(published.error);
+        } else if (!cache_.bind_locator(locator, key)) {
+            persistence_error = "thumbnail cache locator publication failed";
         }
-        if (!cache_.bind_locator(locator, key)) {
-            return failure(ThumbnailPipelineStatus::internal_error,
-                           "thumbnail cache locator publication failed");
+        if (!persistence_error.empty()) {
+            revoke_locator_tiers(cache_, locator);
         }
+    } else {
+        decoded = cache::decode_qoi_rgba8(rendered.qoi_payload);
     }
 
-    auto width = decoded.width;
-    auto height = decoded.height;
-    auto pixels = std::move(decoded.rgba8);
-    if (width > request.canonical_edge || height > request.canonical_edge) {
-        auto scaled = scale_rgba8_to_edge(pixels, width, height, request.canonical_edge);
-        if (!scaled.ok()) {
-            return failure(ThumbnailPipelineStatus::internal_error, std::move(scaled.error));
-        }
-        width = scaled.width;
-        height = scaled.height;
-        pixels = std::move(scaled.rgba8);
+    if (!decoded) {
+        return failure(ThumbnailPipelineStatus::internal_error,
+                       persistence_error.empty() ? "renderer returned an invalid QOI preview"
+                                                 : std::move(persistence_error));
     }
-    return {.status = ThumbnailPipelineStatus::success,
-            .width = width,
-            .height = height,
-            .page_index = request.page_index,
-            .page_count = rendered.metadata.page_count,
-            .source_color_model = rendered.metadata.source_color_model,
-            .provenance = rendered.metadata.provenance,
-            .source_profile_name = std::move(rendered.source_profile_name),
-            .source_profile_fingerprint = std::move(rendered.source_profile_fingerprint),
-            .rgba8 = std::move(pixels),
-            .diagnostic = {},
-            .from_cache = false,
-            .freshness = PreviewFreshness::verified};
+    const cache::ArtifactData artifact{
+        .metadata = rendered.metadata,
+        .cache_key_digest = {},
+        .color_identity = {.source_profile_name = std::move(rendered.source_profile_name),
+                           .source_profile_fingerprint =
+                               std::move(rendered.source_profile_fingerprint)},
+        .payload = {}};
+    auto result = materialize(
+        artifact, {.presentation_edge = request.canonical_edge, .page_index = request.page_index},
+        std::move(decoded));
+    if (result.ok() && !persistence_error.empty()) {
+        cache_save_failed(result, std::move(persistence_error));
+    }
+    return result;
 }
 
 } // namespace vove::preview

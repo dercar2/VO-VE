@@ -59,7 +59,8 @@ class PreviewClient final : public QObject {
     explicit PreviewClient(QObject *parent = nullptr, int request_timeout_ms = 12'000,
                            QString helper_program_override = {},
                            int selected_request_timeout_ms = 35'000,
-                           int extended_request_timeout_ms = 135'000);
+                           int extended_request_timeout_ms = 135'000,
+                           int startup_timeout_ms = 10'000);
     ~PreviewClient() override;
 
     PreviewClient(const PreviewClient &) = delete;
@@ -122,6 +123,7 @@ class PreviewClient final : public QObject {
     request_cache(preview::helper_protocol::CacheOperation operation, CacheHandler handler);
     void fail_cache_requests();
     void connect_to_helper();
+    void fail_startup(preview::helper_protocol::ResponseStatus status);
     void authenticate();
     [[nodiscard]] bool queue_frame(const std::vector<std::byte> &frame,
                                    preview::helper_protocol::RequestId request_id = 0);
@@ -152,6 +154,7 @@ class PreviewClient final : public QObject {
     QLocalSocket *socket_{};
     std::unique_ptr<QTemporaryDir> serverDirectory_;
     QTimer *connectTimer_{};
+    QTimer *startupTimer_{};
     QTimer *idleTimer_{};
     QTimer *requestTimer_{};
     QString serverName_;
@@ -163,6 +166,7 @@ class PreviewClient final : public QObject {
     QByteArray receiveBuffer_;
     QList<QueuedFrame> queuedFrames_;
     QHash<qulonglong, Pending> pending_;
+    QSet<qulonglong> cancelledDispatchedRequests_;
     QHash<qulonglong, CacheHandler> pendingCache_;
     ReplyHandler replyHandler_;
     color::ScreenProfileCache displayCache_;
@@ -170,7 +174,6 @@ class PreviewClient final : public QObject {
     QString monitorFingerprint_;
     preview::helper_protocol::RequestId nextRequestId_{1};
     std::uint64_t cacheMaximumBytes_{10ULL * 1024ULL * 1024ULL * 1024ULL};
-    int connectAttempts_{};
     bool authenticated_{};
     bool stopping_{};
     bool externalComponentRefreshRunning_{};

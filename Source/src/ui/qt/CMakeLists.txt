@@ -61,7 +61,35 @@ target_link_libraries(vove-open-helper PRIVATE Qt6::Gui)
 set_target_properties(vove-open-helper PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 vove_enable_warnings(vove-open-helper)
 
+set(vove_window_components
+    window_shell.cpp
+    window_settings.cpp
+    navigation_controller.cpp
+    catalog_controller.cpp
+    preview_controller.cpp
+    file_command_controller.cpp
+    file_command_input_workflow.cpp
+    file_command_mutation_workflow.cpp
+    file_command_recovery_workflow.cpp
+    file_command_transfer_workflow.cpp
+    file_command_trash_workflow.cpp
+    selection_controller.cpp
+    places_controller.cpp
+    drop_router.cpp
+    trash_controller.cpp
+    status_presenter.cpp
+    navigation_history.cpp
+    navigation_history.hpp
+    selection_command.cpp
+    selection_command.hpp
+    operation_availability.hpp
+    project_dialogs.cpp
+    project_dialogs.hpp
+    settings_dialog.cpp
+    settings_dialog.hpp)
+
 add_executable(vove-ui-qt WIN32
+    ${vove_window_components}
     diagnostic_sink.cpp
     diagnostic_sink.hpp
     components_panel.cpp
@@ -1200,6 +1228,7 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
         object_transfer_queue.cpp
         main_menu_dialog.cpp
         main_menu_dialog.hpp
+        ${vove_window_components}
         main_window.cpp
         main_window.hpp
         startup_registration.cpp
@@ -1341,13 +1370,22 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
         set(font_test "vove-startup-font-${language}-tests")
         add_test(NAME ${font_test} COMMAND vove-qt-shell-tests)
         set_tests_properties(${font_test} PROPERTIES TIMEOUT 30
-            ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_FONT_STARTUP_ONLY=1;VOVE_FONT_STARTUP_LANGUAGE=${language}")
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_FONT_STARTUP_ONLY=1;VOVE_FONT_STARTUP_LANGUAGE=${language}"
+            LABELS "ui-focused")
         if(WIN32)
             set_tests_properties(${font_test} PROPERTIES ENVIRONMENT_MODIFICATION
                 "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
         endif()
     endforeach()
     add_test(NAME vove-qt-shell-tests COMMAND vove-qt-shell-tests)
+    add_test(NAME vove-ui-responsibility-tests COMMAND vove-qt-shell-tests)
+    set_tests_properties(vove-ui-responsibility-tests PROPERTIES TIMEOUT 30
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_UI_RESPONSIBILITY_ONLY=1"
+        LABELS "ui-focused")
+    if(WIN32)
+        set_tests_properties(vove-ui-responsibility-tests PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
+    endif()
     set_tests_properties(vove-qt-shell-tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     if(WIN32)
@@ -1533,4 +1571,11 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
                     "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
         endif()
     endforeach()
+    set_tests_properties(vove-qt-shell-tests vove-preview-pane-tests PROPERTIES LABELS "ui-broad")
+    set_tests_properties(vove-settings-ui-tests vove-file-in-use-ui-tests vove-trash-error-ui-tests
+        vove-navigation-tests vove-mixed-transfer-ui-tests vove-search-dnd-ui-tests
+        vove-folder-rename-ui-tests vove-clipboard-ui-tests vove-modified-time-tests
+        vove-recursive-catalog-ui-tests vove-preview-caption-tests vove-gif-animation-ui-tests
+        PROPERTIES LABELS "ui-focused")
+    include(controller_tests.cmake)
 endif()

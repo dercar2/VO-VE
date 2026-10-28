@@ -630,7 +630,7 @@ scaled_size(const std::uint32_t width, const std::uint32_t height,
             {
                 .source_width = source_width,
                 .source_height = source_height,
-                .page_count = static_cast<std::uint32_t>(top_level_images),
+                .page_count = 1,
                 .source_color_model = source_model,
                 .source_color_profile = std::move(source_profile),
                 .source_profile_fingerprint = std::move(source_profile_fingerprint),

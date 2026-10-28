@@ -4,7 +4,9 @@
 #include "vove/cache/artifact_store.hpp"
 #include "vove/cache/cache_maintenance.hpp"
 #include "vove/cache/memory_artifact_cache.hpp"
+#include "vove/cache/qoi_codec.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -24,7 +26,9 @@ enum class CacheLookupKind : std::uint8_t {
 
 struct CachedThumbnail {
     std::shared_ptr<const ArtifactData> artifact;
-    std::optional<ArtifactIndexRecord> index_record;
+    std::optional<ArtifactIndexRecord> index_record{};
+    // Request-scoped pixels, never retained by the encoded-artifact memory cache.
+    std::optional<QoiDecodeResult> decoded{};
 };
 
 struct CacheLookupResult {
@@ -46,6 +50,8 @@ struct CachePublishResult {
     bool published{};
     bool index_published{};
     std::string error;
+    // A valid decode remains available even when persistence fails.
+    std::optional<QoiDecodeResult> decoded{};
 };
 
 struct DiskCacheStats {
@@ -85,6 +91,8 @@ class PersistentThumbnailCache {
     ArtifactStore store_;
     ArtifactIndex &index_;
     MemoryArtifactCache memory_;
+    // Last-resort guard if neither a durable fence nor the SQLite revocation can be written.
+    std::atomic_bool offline_lookup_disabled_{};
 };
 
 } // namespace vove::cache

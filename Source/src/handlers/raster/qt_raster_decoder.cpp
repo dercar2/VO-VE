@@ -227,14 +227,6 @@ class NativeSourceDevice final : public QIODevice {
     return result;
 }
 
-[[nodiscard]] std::optional<std::uint32_t> known_page_count(QImageReader &reader) {
-    const auto count = reader.imageCount();
-    if (count <= 0) {
-        return std::nullopt;
-    }
-    return static_cast<std::uint32_t>(count);
-}
-
 // Qt exposes an invalid color space both for absent and for rejected ICC data.
 // Only a confirmed absence may use the approximate JPEG path.
 [[nodiscard]] bool jpeg_allows_unprofiled_approximation(QIODevice &device) {
@@ -333,7 +325,6 @@ decode_qt_raster_device(QIODevice &device, const RasterFormat format,
         return failure(QtRasterDecodeErrorCode::dimension_limit_exceeded);
     }
 
-    const auto page_count = known_page_count(reader);
     const auto requested_size = canonical_size(source_size, limits.maximum_output_edge);
     if (requested_size != source_size) {
         reader.setScaledSize(requested_size);
@@ -440,7 +431,7 @@ decode_qt_raster_device(QIODevice &device, const RasterFormat format,
         .format = format,
         .source_width = static_cast<std::uint32_t>(source_width),
         .source_height = static_cast<std::uint32_t>(source_height),
-        .page_count = page_count,
+        .page_count = 1,
         .source_color_space = source_color_space,
         .output_color_space = output_color_space,
         .color_summary = (assigned_default_cmyk || approximate_cmyk)

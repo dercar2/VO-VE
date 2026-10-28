@@ -44,7 +44,6 @@ namespace vove::ui {
 namespace {
 
 namespace protocol = preview::helper_protocol;
-inline constexpr int kMaximumConnectAttempts = 40;
 inline constexpr int kConnectRetryMs = 50;
 inline constexpr int kIdleStopMs = 60'000;
 inline constexpr int kCacheMaintenanceTimeoutMs = 10 * 60 * 1000;
@@ -124,7 +123,7 @@ inline constexpr int kBackpressureRetryMs = 25;
 
 PreviewClient::PreviewClient(QObject *parent, const int request_timeout_ms,
                              QString helper_program_override, const int selected_request_timeout_ms,
-                             const int extended_request_timeout_ms)
+                             const int extended_request_timeout_ms, const int startup_timeout_ms)
     : QObject(parent), helperProgramOverride_(std::move(helper_program_override)),
       requestTimeoutMs_(std::clamp(request_timeout_ms, 100, 120'000)),
       selectedRequestTimeoutMs_(std::clamp(selected_request_timeout_ms, 100, 120'000)),
@@ -132,9 +131,12 @@ PreviewClient::PreviewClient(QObject *parent, const int request_timeout_ms,
           std::clamp(extended_request_timeout_ms, requestTimeoutMs_, 135'000)) {
     process_ = new QProcess(this);
     connectTimer_ = new QTimer(this);
+    startupTimer_ = new QTimer(this);
     idleTimer_ = new QTimer(this);
     requestTimer_ = new QTimer(this);
     connectTimer_->setSingleShot(true);
+    startupTimer_->setSingleShot(true);
+    startupTimer_->setInterval(std::clamp(startup_timeout_ms, 100, 120'000));
     idleTimer_->setSingleShot(true);
     requestTimer_->setSingleShot(true);
     replace_socket();
@@ -149,7 +151,11 @@ PreviewClient::PreviewClient(QObject *parent, const int request_timeout_ms,
             const auto code = std::to_string(static_cast<int>(error));
             DiagnosticSink::instance().record("preview.helper_error", {{"code", code}});
             if (!stopping_ && !restarting_) {
-                fail_pending(protocol::ResponseStatus::internal_error);
+                if (!authenticated_) {
+                    fail_startup(protocol::ResponseStatus::internal_error);
+                } else {
+                    fail_pending(protocol::ResponseStatus::internal_error);
+                }
             }
         });
     QObject::connect(process_, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
@@ -159,6 +165,8 @@ PreviewClient::PreviewClient(QObject *parent, const int request_timeout_ms,
                          DiagnosticSink::instance().record("preview.helper_finished",
                                                            {{"code", code}, {"status", status}});
                          authenticated_ = false;
+                         startupTimer_->stop();
+                         connectTimer_->stop();
                          if (restarting_) {
                              QTimer::singleShot(0, this, [this] {
                                  if (restarting_ && process_->state() == QProcess::NotRunning) {
@@ -171,8 +179,11 @@ PreviewClient::PreviewClient(QObject *parent, const int request_timeout_ms,
                          }
                      });
     QObject::connect(connectTimer_, &QTimer::timeout, this, [this] { connect_to_helper(); });
+    QObject::connect(startupTimer_, &QTimer::timeout, this,
+                     [this] { fail_startup(protocol::ResponseStatus::timed_out); });
     QObject::connect(idleTimer_, &QTimer::timeout, this, [this] {
-        if (pending_.isEmpty() && pendingCache_.isEmpty() && queuedFrames_.isEmpty()) {
+        if (pending_.isEmpty() && cancelledDispatchedRequests_.isEmpty() &&
+            pendingCache_.isEmpty() && queuedFrames_.isEmpty()) {
             stop();
         }
     });
@@ -209,15 +220,20 @@ void PreviewClient::replace_socket() {
         socket_, &QLocalSocket::errorOccurred, this, [this](QLocalSocket::LocalSocketError error) {
             const auto helper_not_ready = error == QLocalSocket::ServerNotFoundError ||
                                           error == QLocalSocket::ConnectionRefusedError;
-            if (stopping_ || !helper_not_ready || process_->state() == QProcess::NotRunning ||
-                connectAttempts_ >= kMaximumConnectAttempts) {
-                if (!stopping_ && connectAttempts_ >= kMaximumConnectAttempts) {
-                    fail_pending(protocol::ResponseStatus::internal_error);
-                }
+            if (stopping_ || restarting_) {
                 return;
             }
-            ++connectAttempts_;
-            connectTimer_->start(kConnectRetryMs);
+            if (authenticated_) {
+                authenticated_ = false;
+                receiveBuffer_.clear();
+                fail_pending(protocol::ResponseStatus::disconnected);
+                process_->kill();
+            } else if (helper_not_ready && process_->state() != QProcess::NotRunning &&
+                       startupTimer_->isActive()) {
+                connectTimer_->start(kConnectRetryMs);
+            } else {
+                fail_startup(protocol::ResponseStatus::internal_error);
+            }
         });
 }
 
@@ -434,7 +450,8 @@ protocol::RequestId PreviewClient::request_preview(
 }
 
 bool PreviewClient::readers_idle() const noexcept {
-    return pending_.isEmpty() && !restarting_ && !stopping_ && activeRequestId_ == 0 &&
+    return pending_.isEmpty() && cancelledDispatchedRequests_.isEmpty() && !restarting_ &&
+           !stopping_ && activeRequestId_ == 0 &&
            (process_->state() == QProcess::NotRunning || authenticated_);
 }
 
@@ -447,6 +464,9 @@ void PreviewClient::cancel_generation(const std::uint64_t generation) {
     for (auto iterator = pending_.begin(); iterator != pending_.end();) {
         if (iterator->generation == generation) {
             removed_ids.push_back(iterator.key());
+            if (iterator->dispatched) {
+                cancelledDispatchedRequests_.insert(iterator.key());
+            }
             cancelled_inflight = cancelled_inflight || iterator->dispatched || iterator->active ||
                                  iterator.key() == static_cast<qulonglong>(activeRequestId_);
             iterator = pending_.erase(iterator);
@@ -457,6 +477,7 @@ void PreviewClient::cancel_generation(const std::uint64_t generation) {
     for (auto iterator = queuedFrames_.begin(); iterator != queuedFrames_.end();) {
         if (iterator->request_id != 0 &&
             removed_ids.contains(static_cast<qulonglong>(iterator->request_id))) {
+            cancelledDispatchedRequests_.remove(static_cast<qulonglong>(iterator->request_id));
             iterator = queuedFrames_.erase(iterator);
         } else {
             ++iterator;
@@ -471,7 +492,13 @@ void PreviewClient::cancel_generation(const std::uint64_t generation) {
     } catch (...) {
         socket_->abort();
     }
-    if (cancelled_inflight && process_->state() != QProcess::NotRunning) {
+    const auto unrelated_dispatched =
+        std::any_of(pending_.cbegin(), pending_.cend(),
+                    [](const Pending &pending) { return pending.dispatched; });
+    const auto cancelled_active =
+        removed_ids.contains(static_cast<qulonglong>(activeRequestId_)) ||
+        (activeRequestId_ == 0 && !unrelated_dispatched);
+    if (cancelled_inflight && cancelled_active && process_->state() != QProcess::NotRunning) {
         restart_helper(/*preserve_extended_attempts=*/true);
     }
     arm_request_timeout();
@@ -515,14 +542,18 @@ void PreviewClient::retain_generation_entries(const std::uint64_t generation,
 }
 
 void PreviewClient::ensure_started() {
+    // finish_restart owns startup until the previous process exit is fully handled.
+    if (restarting_) {
+        return;
+    }
     if (process_->state() != QProcess::NotRunning) {
         flush_frames();
         return;
     }
     stopping_ = false;
     authenticated_ = false;
-    connectAttempts_ = 0;
     cleanup_server_endpoint();
+    replace_socket();
 #ifdef Q_OS_WIN
     serverName_ = QStringLiteral("vove-preview-%1-%2")
                       .arg(QCoreApplication::applicationPid())
@@ -591,7 +622,28 @@ void PreviewClient::ensure_started() {
     process_->setProcessChannelMode(QProcess::ForwardedErrorChannel);
     const auto diagnostic_helper = utf8(helper);
     DiagnosticSink::instance().record("preview.helper_launch", {{"program", diagnostic_helper}});
+    startupTimer_->start();
     process_->start();
+}
+
+void PreviewClient::fail_startup(const protocol::ResponseStatus status) {
+    startupTimer_->stop();
+    connectTimer_->stop();
+    restarting_ = true;
+    authenticated_ = false;
+    receiveBuffer_.clear();
+    replace_socket();
+    if (process_->state() != QProcess::NotRunning) {
+        process_->kill();
+    }
+    fail_pending(status);
+    if (process_->state() == QProcess::NotRunning) {
+        QTimer::singleShot(0, this, [this] {
+            if (restarting_ && process_->state() == QProcess::NotRunning) {
+                finish_restart();
+            }
+        });
+    }
 }
 
 void PreviewClient::connect_to_helper() {
@@ -643,7 +695,7 @@ void PreviewClient::flush_frames() {
 }
 
 qsizetype PreviewClient::dispatched_request_count() const noexcept {
-    qsizetype count{};
+    qsizetype count = cancelledDispatchedRequests_.size();
     for (auto iterator = pending_.cbegin(); iterator != pending_.cend(); ++iterator) {
         count += iterator->dispatched ? 1 : 0;
     }
@@ -735,6 +787,8 @@ void PreviewClient::dispatch_frame(const QByteArray &frame) {
             return;
         }
         authenticated_ = true;
+        startupTimer_->stop();
+        connectTimer_->stop();
         DiagnosticSink::instance().record("preview.helper_authenticated");
         dispatch_deferred_requests();
         if (has_dispatched_requests()) {
@@ -754,6 +808,9 @@ void PreviewClient::dispatch_frame(const QByteArray &frame) {
         }
         const auto found = pending_.find(static_cast<qulonglong>(started.request_id));
         if (found == pending_.end()) {
+            if (cancelledDispatchedRequests_.contains(static_cast<qulonglong>(started.request_id))) {
+                restart_helper(/*preserve_extended_attempts=*/true);
+            }
             return;
         }
         if (activeRequestId_ != 0 && activeRequestId_ != started.request_id) {
@@ -798,6 +855,12 @@ void PreviewClient::dispatch_frame(const QByteArray &frame) {
     protocol::PreviewResponse response;
     if (!protocol::decode_preview_response(bytes(frame), response, error)) {
         socket_->abort();
+        return;
+    }
+    if (cancelledDispatchedRequests_.remove(static_cast<qulonglong>(response.request_id))) {
+        dispatch_deferred_requests();
+        arm_request_timeout();
+        schedule_idle_stop();
         return;
     }
     const auto found = pending_.find(static_cast<qulonglong>(response.request_id));
@@ -968,6 +1031,7 @@ void PreviewClient::deliver_final(PreviewReply reply, ReplyHandler &&handler) {
 void PreviewClient::fail_pending(const protocol::ResponseStatus status) {
     requestTimer_->stop();
     auto pending = std::exchange(pending_, {});
+    cancelledDispatchedRequests_.clear();
     queuedFrames_.clear();
     activeRequestId_ = 0;
     progressDeadline_ = std::chrono::steady_clock::time_point::max();
@@ -1052,6 +1116,8 @@ void PreviewClient::restart_helper(const bool preserve_extended_attempts) {
         return;
     }
     restarting_ = true;
+    startupTimer_->stop();
+    connectTimer_->stop();
     requestTimer_->stop();
     authenticated_ = false;
     const auto previous_active_request_id = activeRequestId_;
@@ -1060,6 +1126,7 @@ void PreviewClient::restart_helper(const bool preserve_extended_attempts) {
     fail_cache_requests();
     receiveBuffer_.clear();
     queuedFrames_.clear();
+    cancelledDispatchedRequests_.clear();
     QHash<qulonglong, Pending> cancelled;
     for (auto iterator = pending_.begin(); iterator != pending_.end();) {
         if (iterator->extended_limits && iterator->dispatched && !preserve_extended_attempts) {
@@ -1101,7 +1168,7 @@ void PreviewClient::finish_restart() {
     }
     restarting_ = false;
     cleanup_server_endpoint();
-    if (pending_.isEmpty()) {
+    if (pending_.isEmpty() && pendingCache_.isEmpty()) {
         schedule_idle_stop();
         return;
     }
@@ -1133,7 +1200,9 @@ void PreviewClient::cleanup_server_endpoint() {
 }
 
 void PreviewClient::rebuild_request_queue() {
-    queuedFrames_.clear();
+    queuedFrames_.removeIf([this](const QueuedFrame &frame) {
+        return !pendingCache_.contains(static_cast<qulonglong>(frame.request_id));
+    });
     for (auto iterator = pending_.begin(); iterator != pending_.end(); ++iterator) {
         iterator->dispatched = false;
         iterator->active = false;
@@ -1151,7 +1220,7 @@ void PreviewClient::retry_backpressured_requests() {
 }
 
 void PreviewClient::arm_request_timeout() {
-    if (pending_.isEmpty() || !has_dispatched_requests()) {
+    if ((pending_.isEmpty() && cancelledDispatchedRequests_.isEmpty()) || !has_dispatched_requests()) {
         requestTimer_->stop();
         return;
     }
@@ -1173,7 +1242,7 @@ void PreviewClient::arm_request_timeout() {
 }
 
 void PreviewClient::handle_request_timeout() {
-    if (pending_.isEmpty()) {
+    if (pending_.isEmpty() && cancelledDispatchedRequests_.isEmpty()) {
         return;
     }
     protocol::RequestId timed_out{};
@@ -1200,7 +1269,8 @@ void PreviewClient::handle_request_timeout() {
 }
 
 void PreviewClient::schedule_idle_stop() {
-    if (pending_.isEmpty() && pendingCache_.isEmpty() && queuedFrames_.isEmpty() &&
+    if (pending_.isEmpty() && cancelledDispatchedRequests_.isEmpty() && pendingCache_.isEmpty() &&
+        queuedFrames_.isEmpty() &&
         process_->state() != QProcess::NotRunning) {
         idleTimer_->start(kIdleStopMs);
     }
@@ -1210,12 +1280,14 @@ void PreviewClient::stop() {
     stopping_ = true;
     restarting_ = false;
     connectTimer_->stop();
+    startupTimer_->stop();
     idleTimer_->stop();
     requestTimer_->stop();
     authenticated_ = false;
     receiveBuffer_.clear();
     queuedFrames_.clear();
     pending_.clear();
+    cancelledDispatchedRequests_.clear();
     pendingCache_.clear();
     activeRequestId_ = 0;
     progressDeadline_ = std::chrono::steady_clock::time_point::max();

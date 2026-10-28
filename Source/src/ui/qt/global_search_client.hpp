@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 class QObject;
@@ -40,12 +41,15 @@ class GlobalSearchClient final {
     void process_finished(QProcess *process, std::uint64_t generation);
     void process_failed(QProcess *process, std::uint64_t generation);
     void fail_current(search::SearchStatus status, const QString &message);
+    void complete_current();
+    void retire_process(QProcess *process);
     void deliver(search::SearchBatch batch);
     [[nodiscard]] QString helper_path() const;
 
     QObject *owner_{};
     QProcess *process_{};
     QTimer *timeout_{};
+    QTimer *exitTimeout_{};
     ReplyHandler replyHandler_;
     QString helperOverride_;
     QByteArray incoming_;
@@ -54,6 +58,7 @@ class GlobalSearchClient final {
     std::uint64_t nextGeneration_{};
     std::uint64_t activeGeneration_{};
     bool finalSeen_{};
+    std::optional<search::SearchBatch> finalBatch_;
 };
 
 } // namespace vove::ui
