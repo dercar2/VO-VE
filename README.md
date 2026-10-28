@@ -12,8 +12,8 @@ NAS devices. It helps you quickly find the artwork you need, recognise it by its
 - Website: [vo-ve.ru](https://vo-ve.ru) (not ready yet)
 - Repository: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Report a problem: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Version: **0.2.20**
-- Build: **release Alfa**
+- Version: **1.0.0**
+- Build: **Beta**
 - Currently available for: **Windows x64 and Linux amd64**
 
 **[Download VO-VE](https://github.com/dercar2/VO-VE/releases/latest)**

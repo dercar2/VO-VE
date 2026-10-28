@@ -12,8 +12,8 @@ NAS. Программа помогает быстро найти нужный м
 - Сайт: [vo-ve.ru](https://vo-ve.ru) (пока не готов)
 - Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **0.2.20**
-- Сборка: **release Alfa**
+- Версия: **1.0.0**
+- Сборка: **Beta**
 - Платформы текущей поставки: **Windows x64 и Linux amd64**
 
 **[Скачать VO-VE](https://github.com/dercar2/VO-VE/releases/latest)**
