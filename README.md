@@ -159,14 +159,14 @@ No native graphics editor is required or launched to generate previews.
 Ready-to-use builds are in the separate
 [Releases](https://github.com/dercar2/VO-VE/releases) section, not mixed in with the source files.
 
-Current version: **[VO-VE 0.2.20](https://github.com/dercar2/VO-VE/releases/tag/v0.2.20)**.
+Current version: **[VO-VE 1.0.0](https://github.com/dercar2/VO-VE/releases/tag/v1.0.0)**.
 
-- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/VO-VE-0.2.20-windows-x64-setup.exe)
-- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/vo-ve_0.2.20_amd64.deb)
-- [Source code 0.2.20](https://github.com/dercar2/VO-VE/tree/v0.2.20/Source)
+- [Windows x64 installer](https://github.com/dercar2/VO-VE/releases/download/v1.0.0/VO-VE-1.0.0-windows-x64-setup.exe)
+- [Linux amd64: DEB package](https://github.com/dercar2/VO-VE/releases/download/v1.0.0/vo-ve_1.0.0_amd64.deb)
+- [Source code 1.0.0](https://github.com/dercar2/VO-VE/tree/v1.0.0/Source)
 - [Licences and notices](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
 - [Dependency sources](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (for building, not needed for a normal installation)
-- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/SHA256SUMS.txt)
+- [SHA-256 checksums](https://github.com/dercar2/VO-VE/releases/download/v1.0.0/SHA256SUMS.txt)
 
 Windows uses a single `.exe` installer. The current Linux distribution is an amd64 `.deb` package. Additional components are not disguised as part of VO-VE and are installed only
 when explicitly selected by the user.
@@ -189,11 +189,11 @@ Building the full interface and all handlers requires Qt and the pinned dependen
 `Source/THIRD_PARTY_NOTES.md` and `Source/docs/dependencies`.
 The exact sources of external dependencies are available as a separate attachment,
 `VO-VE-0.2.13-dependency-sources.zip`, on the release page.
-The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 0.2.20 sources.
+The dependencies have not changed: their source archive and the licence archive are preserved byte-for-byte under the baseline version number 0.2.13. For the application itself, use the 1.0.0 sources.
 
 ## Project Status
 
-VO-VE is at the **release Alfa** stage. The core functionality is implemented and used in real work on Windows and Linux. Field testing, visual refinement and
+VO-VE is at the **Beta** stage. The core functionality is implemented and used in real work on Windows and Linux. Field testing, visual refinement and
 expansion of the real-document test corpus continue.
 
 The project deliberately stays focused. A new feature is accepted only when it helps with viewing or working with files and does not undermine the core requirements: compactness, speed, stability and predictable behaviour on local and network resources.

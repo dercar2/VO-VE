@@ -148,14 +148,14 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 Готовые сборки находятся в отдельном разделе
 [Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
 
-Текущая версия: **[VO-VE 0.2.20](https://github.com/dercar2/VO-VE/releases/tag/v0.2.20)**.
+Текущая версия: **[VO-VE 1.0.0](https://github.com/dercar2/VO-VE/releases/tag/v1.0.0)**.
 
-- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/VO-VE-0.2.20-windows-x64-setup.exe)
-- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/vo-ve_0.2.20_amd64.deb)
-- [Исходники 0.2.20](https://github.com/dercar2/VO-VE/tree/v0.2.20/Source)
+- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v1.0.0/VO-VE-1.0.0-windows-x64-setup.exe)
+- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v1.0.0/vo-ve_1.0.0_amd64.deb)
+- [Исходники 1.0.0](https://github.com/dercar2/VO-VE/tree/v1.0.0/Source)
 - [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
 - [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
-- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v0.2.20/SHA256SUMS.txt)
+- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v1.0.0/SHA256SUMS.txt)
 
 В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет `.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
 по явному выбору пользователя.
@@ -178,11 +178,11 @@ cmake --build --preset source-release
 `Source/THIRD_PARTY_NOTES.md` и `Source/docs/dependencies`.
 Точные исходники внешних зависимостей доступны отдельным вложением
 `VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
-Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером базовой поставки 0.2.13. Для самого приложения используйте исходники 0.2.20.
+Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером базовой поставки 0.2.13. Для самого приложения используйте исходники 1.0.0.
 
 ## Состояние Проекта
 
-VO-VE находится на стадии **release Alfa**. Основная функциональность реализована и используется в реальной работе на Windows и Linux. Продолжаются полевая проверка, визуальная доводка и
+VO-VE находится на стадии **Beta**. Основная функциональность реализована и используется в реальной работе на Windows и Linux. Продолжаются полевая проверка, визуальная доводка и
 расширение корпуса реальных документов.
 
 Проект сознательно остаётся узким. Новая функция принимается только тогда, когда она помогает просмотру или работе с файлами и не разрушает основные требования: компактность, скорость, стабильность и предсказуемое поведение на локальных и сетевых ресурсах.
