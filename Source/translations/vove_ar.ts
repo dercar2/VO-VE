@@ -3470,6 +3470,11 @@ Stage: %2</source>
     <message><source>This operation can be retried; cancelling it here is not supported.</source><translation>يمكن إعادة محاولة الاسترداد لهذه العملية، لكن إلغاءها هنا غير مدعوم.</translation></message>
     <message><source>Retry recovery</source><translation>إعادة محاولة الاسترداد</translation></message>
     <message><source>Cancel remaining moves</source><translation>إلغاء النقل المتبقي</translation></message>
+    <message><source>Archive unfinished transfer</source><translation>أرشفة النقل غير المكتمل</translation></message>
+    <message><source>Finish archiving</source><translation>إكمال الأرشفة</translation></message>
+    <message><source>Archiving stops further recovery, not the files. Sources, destinations and partial copies stay in place. The unfinished result remains unknown; a local receipt preserves the operation records.</source><translation>توقف الأرشفة الاسترداد اللاحق ولا تحذف الملفات. تبقى المصادر والوجهات والنسخ الجزئية في أماكنها. تظل نتيجة الجزء غير المكتمل غير معروفة، وتُحفظ سجلات العملية في إيصال محلي.</translation></message>
+    <message><source>Unfinished transfer archived; files and partial copies were kept. Receipt: %1</source><translation>تمت أرشفة النقل غير المكتمل مع حفظ الملفات والنسخ الجزئية. الإيصال: %1</translation></message>
+    <message><source>Transfer paused: %1. Press F5 or open Unfinished operation… to choose an action.</source><translation>تم إيقاف النقل مؤقتًا: %1. اضغط F5 أو افتح «عملية غير مكتملة…» لاختيار إجراء.</translation></message>
     <message><source>The operation could not be started. Its record was kept.</source><translation>تعذر بدء العملية. تم الاحتفاظ بسجلها.</translation></message>
 </context>
 </TS>

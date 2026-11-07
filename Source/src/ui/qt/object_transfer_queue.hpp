@@ -6,6 +6,7 @@
 
 #include <QString>
 #include <QStringList>
+#include <QByteArray>
 #include <functional>
 #include <memory>
 
@@ -15,10 +16,12 @@ struct ObjectTransferResult {
     bool success{};
     bool cancelled{};
     bool recovery{};
+    bool archived{};
     fileops::OperationStatus operation_status{fileops::OperationStatus::success};
     std::size_t completed{};
     std::size_t total{};
     QString detail;
+    QString archive_receipt{};
     QStringList moved_sources;
     QStringList published_paths;
 };
@@ -38,6 +41,13 @@ class ObjectTransferQueue final {
                std::filesystem::path destination, Progress progress, Conflict conflict,
                Completion completion);
     bool resume(Progress progress, Conflict conflict, Completion completion);
+    // Explicitly abandons further execution, not the payload. Bind confirmation to the
+    // displayed typed journal payload; the archive intent survives interrupted retirement.
+    bool archive(QByteArray expected_payload_sha256, Completion completion);
+    bool archive_pending() const;
+#ifdef VOVE_UI_TEST_HOOKS
+    void set_archive_checkpoint_for_testing(std::function<void(int)> checkpoint);
+#endif
     void resolve_conflict(fileops::FileTransferConflictDecision decision);
     // Drains accepted callbacks. From a queue callback, requests stop without waiting on itself.
     void stop();

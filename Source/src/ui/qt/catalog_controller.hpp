@@ -67,6 +67,7 @@ class CatalogController final : public QObject {
     void open_directory(const QString &path);
     void prepare_navigation();
     void refresh();
+    void leave_trash_for_recovery();
     void refresh_directory_sources();
     void resume_polling(int interval_ms = -1);
     void poll();

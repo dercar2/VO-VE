@@ -1030,6 +1030,44 @@ DurableJournalResult DurableJournalStore::remove() const {
     return {.status = DurableJournalStatus::success, .error = {}};
 }
 
+DurableJournalReadResult DurableJournalStore::read_physical_generation(
+    const DurableJournalGeneration generation) const {
+    const auto &path = generation == DurableJournalGeneration::primary ? primary_path_
+        : generation == DurableJournalGeneration::previous ? previous_path_ : temporary_path_;
+    auto bytes = read_file_bytes(path, maximum_envelope_bytes(maximum_payload_bytes_));
+#ifndef _WIN32
+    if (bytes.status == FileReadStatus::missing)
+        bytes = read_file_bytes(removal_claim_path(path), maximum_envelope_bytes(maximum_payload_bytes_));
+#endif
+    DurableJournalReadResult result;
+    result.status = bytes.status == FileReadStatus::success ? DurableJournalStatus::success
+        : bytes.status == FileReadStatus::missing ? DurableJournalStatus::not_found
+        : bytes.status == FileReadStatus::too_large ? DurableJournalStatus::payload_too_large
+                                                   : DurableJournalStatus::io_error;
+    result.error = bytes.error;
+    result.payload = std::move(bytes.bytes);
+    return result;
+}
+
+DurableJournalResult DurableJournalStore::remove_physical_generation_if_matches(
+    const DurableJournalGeneration generation, const std::span<const std::byte> expected_bytes) const {
+    const auto &path = generation == DurableJournalGeneration::primary ? primary_path_
+        : generation == DurableJournalGeneration::previous ? previous_path_ : temporary_path_;
+    if (expected_bytes.size() > maximum_envelope_bytes(maximum_payload_bytes_))
+        return {.status = DurableJournalStatus::payload_too_large, .error = {}};
+    const auto removed = remove_path_if_bytes_match(
+        path, expected_bytes, maximum_envelope_bytes(maximum_payload_bytes_));
+    if (removed.status == MatchedRemoveStatus::mismatch)
+        return {.status = DurableJournalStatus::payload_mismatch, .error = {}};
+    if (removed.status == MatchedRemoveStatus::io_error) return io_failure(removed.error);
+#ifndef _WIN32
+    const auto staging = remove_empty_removal_staging(path);
+    if (staging.error) return io_failure(staging.error);
+#endif
+    if (const auto error = sync_parent_directory(path); error) return io_failure(error);
+    return {.status = DurableJournalStatus::success, .error = {}};
+}
+
 DurableJournalResult DurableJournalStore::remove_if_payload_matches(
     const std::span<const std::byte> expected_payload) const {
     if (expected_payload.size() > maximum_payload_bytes_) {

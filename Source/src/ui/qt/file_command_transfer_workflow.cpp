@@ -49,7 +49,7 @@ bool FileCommandController::Impl::start_transfer_selection(const QList<core::Dir
 
 bool FileCommandController::Impl::start_object_transfer(const QList<core::DirectoryEntry> &entries,
                                         const QString &destination, const fileops::FileTransferKind kind,
-                                        const bool resume) {
+                                        const bool resume, const QByteArray &archive_record) {
     if (renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
         fileOperationService_.busy() || pendingRenameOperation_ || batchRenameCoordinator_.busy() ||
         permanentDeleteCoordinator_.busy() || trashCoordinator_.busy() ||
@@ -58,6 +58,7 @@ bool FileCommandController::Impl::start_object_transfer(const QList<core::Direct
     ports_.clear_pending_mosaics();
     activeTransferKind_ = kind;
     set_transfer_in_flight(true);
+    set_property("objectTransferDetail", QString{});
     operationStatus_ = QCoreApplication::translate("MainWindow", "Checking the selected objects…");
     publish_status();
     const QPointer<Impl> window(this);
@@ -77,10 +78,16 @@ bool FileCommandController::Impl::start_object_transfer(const QList<core::Direct
             window->set_transfer_in_flight(false);
             window->notify_file_in_use(result.operation_status);
             static_cast<void>(window->refresh_current_operation_journal_state());
-            if (result.success) {
+            if (result.archived) {
+                window->operationStatus_ = QCoreApplication::translate("TrashRecoveryDialog",
+                    "Unfinished transfer archived; files and partial copies were kept. Receipt: %1")
+                    .arg(result.archive_receipt);
+            } else if (result.success) {
                 window->operationStatus_ = QCoreApplication::translate("MainWindow", "Objects transferred: %1").arg(result.completed);
             } else if (result.recovery) {
-                window->operationStatus_ = QCoreApplication::translate("MainWindow", "Transfer paused. Check the network and press F5");
+                window->operationStatus_ = QCoreApplication::translate("TrashRecoveryDialog",
+                    "Transfer paused: %1. Press F5 or open Unfinished operation… to choose an action.")
+                    .arg(result.detail);
             } else if (result.cancelled) {
                 window->operationStatus_ = QCoreApplication::translate("MainWindow", "Transfer cancelled. Objects transferred: %1").arg(result.completed);
             } else {
@@ -100,7 +107,8 @@ bool FileCommandController::Impl::start_object_transfer(const QList<core::Direct
                 window->schedule_global_search();
         }, Qt::QueuedConnection);
     };
-    const auto submitted = resume ? objectTransferQueue_.resume(progress, conflict, completion)
+    const auto submitted = !archive_record.isEmpty() ? objectTransferQueue_.archive(archive_record, completion)
+        : resume ? objectTransferQueue_.resume(progress, conflict, completion)
         : objectTransferQueue_.start(kind, {entries.begin(), entries.end()}, native_path(destination), progress, conflict, completion);
     if (!submitted) set_transfer_in_flight(false);
     return submitted;

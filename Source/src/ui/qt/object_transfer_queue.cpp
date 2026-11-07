@@ -10,6 +10,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QCryptographicHash>
+#include <QDateTime>
+#include <QUuid>
 
 #include <algorithm>
 #include <atomic>
@@ -161,6 +164,152 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
         auto result = options.journal_path;
         result += ".object-child";
         return result;
+    }
+    std::filesystem::path archive_intent_path() const {
+        return std::filesystem::path(options.journal_path).concat(".object-archive-intent");
+    }
+    bool archive_pending() const {
+        const DurableJournalStore store(archive_intent_path());
+        for (const auto &path : {store.primary_path(), store.previous_path()}) {
+            std::error_code error;
+            const auto status = std::filesystem::symlink_status(path, error);
+            if ((error && error != std::errc::no_such_file_or_directory) ||
+                (!error && std::filesystem::exists(status))) return true;
+        }
+        return false;
+    }
+    static QByteArray array(const std::vector<std::byte> &bytes) {
+        return {reinterpret_cast<const char *>(bytes.data()), qsizetype(bytes.size())};
+    }
+    static void preserve(const DurableJournalStore &store, const QByteArray &data) {
+        const auto payload = std::span(reinterpret_cast<const std::byte *>(data.constData()),
+                                       std::size_t(data.size()));
+        if (!store.write(payload).ok() || array(store.read().payload) != data)
+            throw std::runtime_error("Cannot durably preserve the transfer archive");
+    }
+#ifdef VOVE_UI_TEST_HOOKS
+    std::function<void(int)> archive_checkpoint;
+#endif
+    void checkpoint(int point) {
+#ifdef VOVE_UI_TEST_HOOKS
+        if (archive_checkpoint) archive_checkpoint(point);
+#else
+        static_cast<void>(point);
+#endif
+        if (stopping) throw std::runtime_error("Archiving interrupted; retry the unfinished operation");
+    }
+    ObjectTransferResult archive_operation(const QByteArray &expected) {
+        const auto receipt_prefix = QStringLiteral("vove-transfer-archive-");
+        std::error_code lease_error;
+        auto child_lease = CurrentOperationLease::try_acquire(child_path(), lease_error);
+        if (!child_lease.owns_lock())
+            throw std::runtime_error("A transfer child is still running; archiving is unavailable");
+        DurableJournalStore intent(archive_intent_path(), kAbsoluteMaximumDurableJournalPayloadBytes);
+        auto stored = intent.read();
+        if (stored.status == DurableJournalStatus::not_found) {
+            load();
+            const auto current = journal.read();
+            if (expected.size() != 32 || !current.ok() ||
+                QCryptographicHash::hash(array(current.payload), QCryptographicHash::Sha256) != expected)
+                throw std::runtime_error("The unfinished operation changed; reopen its menu");
+            QJsonArray generations;
+            for (int slot = 0; slot != 2; ++slot) {
+                const DurableJournalStore source(slot == 0 ? options.journal_path : child_path());
+                for (int generation = 0; generation != 3; ++generation) {
+                    const auto read = source.read_physical_generation(DurableJournalGeneration(generation));
+                    if (!read.ok() && read.status != DurableJournalStatus::not_found)
+                        throw std::runtime_error("Cannot read all transfer journal generations; records were kept");
+                    const auto bytes = array(read.payload);
+                    generations.append(QJsonObject{{"slot", slot}, {"generation", generation},
+                        {"present", read.ok()}, {"bytes", QString::fromLatin1(bytes.toBase64())},
+                        {"sha256", QString::fromLatin1(QCryptographicHash::hash(
+                            bytes, QCryptographicHash::Sha256).toHex())}});
+                }
+            }
+            const auto acknowledged = std::min(plan.items.size(), plan.index + (plan.phase == 2 ? 1U : 0U));
+            const auto record = QJsonDocument(QJsonObject{
+                {"schema", 1}, {"action", "archive_object_transfer"},
+                {"journal", key(options.journal_path)},
+                {"operation", QString::number(plan.operation_id)},
+                {"recordedCompleted", qint64(acknowledged)}, {"total", qint64(plan.items.size())},
+                {"result", "unfinished_result_unknown"},
+                {"payloadPathsModified", false}, {"remoteMetadataCopied", false},
+                {"queue", QJsonDocument::fromJson(array(current.payload)).object()},
+                {"createdUtc", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
+                {"receipt", receipt_prefix +
+                    QUuid::createUuid().toString(QUuid::WithoutBraces) + ".vove"},
+                {"generations", generations}}).toJson(QJsonDocument::Compact);
+            // This intent is also a complete backup. Once committed, neither F5 nor restart may
+            // resume the old move, even if retirement is interrupted between two generations.
+            preserve(intent, record);
+            // Both generations retain the selected action, never an earlier resumable move.
+            preserve(intent, record);
+            checkpoint(0);
+            stored = intent.read();
+        }
+        if (!stored.ok()) throw std::runtime_error("The archive intent is unreadable; records were kept");
+        const auto record = QJsonDocument::fromJson(array(stored.payload)).object();
+        const auto receipt_name = record.value("receipt").toString();
+        const auto receipt_id = receipt_name.mid(receipt_prefix.size(), 36);
+        const auto receipt_path = native(receipt_name);
+        const auto generations = record.value("generations").toArray();
+        const auto total = record.value("total").toInteger(-1);
+        const auto completed = record.value("recordedCompleted").toInteger(-1);
+        if (record.value("schema").toInt() != 1 ||
+            record.value("action").toString() != "archive_object_transfer" ||
+            record.value("journal").toString() != key(options.journal_path) ||
+            receipt_path != receipt_path.filename() ||
+            receipt_name != receipt_prefix + receipt_id + ".vove" ||
+            QUuid::fromString(receipt_id).isNull() ||
+            QUuid::fromString(receipt_id).toString(QUuid::WithoutBraces) != receipt_id ||
+            generations.size() != 6 ||
+            total < 1 || total > qint64(maximum_objects) || completed < 0 || completed > total)
+            throw std::runtime_error("Invalid archive intent; records were kept");
+        DurableJournalStore receipt(options.journal_path.parent_path() / receipt_path,
+                                     kAbsoluteMaximumDurableJournalPayloadBytes);
+        const auto existing = receipt.read();
+        if (existing.status == DurableJournalStatus::not_found) preserve(receipt, array(stored.payload));
+        else if (!existing.ok() || existing.payload != stored.payload)
+            throw std::runtime_error("The archive receipt changed; records were kept");
+        checkpoint(1);
+        // Validate every saved generation before retiring any. Only these six local paths are
+        // eligible; source/destination/manifest paths in their payloads are never followed.
+        for (int index = 0; index != 6; ++index) {
+            const auto entry = generations[index].toObject();
+            const auto bytes = QByteArray::fromBase64(entry.value("bytes").toString().toLatin1());
+            if (entry.value("slot").toInt(-1) != index / 3 ||
+                entry.value("generation").toInt(-1) != index % 3 ||
+                !entry.value("present").isBool() ||
+                bytes.toBase64() != entry.value("bytes").toString().toLatin1() ||
+                QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex() !=
+                    entry.value("sha256").toString().toLatin1() ||
+                (!entry.value("present").toBool() && !bytes.isEmpty()))
+                throw std::runtime_error("Invalid archived generation; records were kept");
+            const DurableJournalStore source(index < 3 ? options.journal_path : child_path());
+            const auto current = source.read_physical_generation(DurableJournalGeneration(index % 3));
+            if (current.status != DurableJournalStatus::not_found &&
+                (!current.ok() || !entry.value("present").toBool() || array(current.payload) != bytes))
+                throw std::runtime_error("A transfer journal changed; records were kept for review");
+        }
+        for (const int index : {3, 4, 5, 0, 1, 2}) {
+            checkpoint(2);
+            const auto entry = generations[index].toObject();
+            const DurableJournalStore source(index < 3 ? options.journal_path : child_path());
+            const auto generation = DurableJournalGeneration(index % 3);
+            const auto current = source.read_physical_generation(generation);
+            if (current.status == DurableJournalStatus::not_found) continue;
+            const auto bytes = QByteArray::fromBase64(entry.value("bytes").toString().toLatin1());
+            if (!entry.value("present").toBool() || !current.ok() || array(current.payload) != bytes ||
+                !source.remove_physical_generation_if_matches(generation, current.payload).ok())
+                throw std::runtime_error("A transfer journal changed or could not be retired; retry archiving");
+            checkpoint(3);
+        }
+        if (!intent.remove().ok()) throw std::runtime_error("Cannot retire the archive intent; retry archiving");
+        return {.success = false, .cancelled = false, .recovery = false, .archived = true,
+                .completed = std::size_t(record.value("recordedCompleted").toInteger()),
+                .total = std::size_t(record.value("total").toInteger()),
+                .detail = {}, .archive_receipt = text_path(receipt.primary_path()),
+                .moved_sources = {}, .published_paths = {}};
     }
     void save() {
         QJsonArray items;
@@ -733,7 +882,7 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
     }
     bool launch(std::optional<std::vector<core::DirectoryEntry>> sources, FileTransferKind kind,
                 std::filesystem::path destination, Progress progress, Conflict conflict,
-                Completion completion) {
+                Completion completion, QByteArray archive_record = {}) {
         if (!progress || !conflict || !completion)
             return false;
         {
@@ -764,7 +913,8 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
             worker = std::thread(
                 [self, sources = std::move(sources), kind, destination = std::move(destination),
                  progress = std::move(progress), conflict = std::move(conflict),
-                 completion = std::move(completion), lease = std::move(lease)]() mutable {
+                 completion = std::move(completion), lease = std::move(lease),
+                 archive_record = std::move(archive_record)]() mutable {
                     struct WorkerCompletion {
                         State &state;
                         ~WorkerCompletion() {
@@ -782,7 +932,7 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
                         try {
                             result.detail = QString::fromUtf8(detail);
                             result.recovery =
-                                self->journal.read().status != DurableJournalStatus::not_found;
+                                self->archive_pending() || self->journal.read().status != DurableJournalStatus::not_found;
                             result.completed = plan_loaded ? self->plan.index : 0;
                             result.total = plan_loaded ? self->plan.items.size() : 0;
                             result.operation_status = plan_loaded && self->plan.phase == 3 &&
@@ -794,7 +944,11 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
                         }
                     };
                     try {
-                        if (sources) {
+                        if (!sources && (self->archive_pending() || !archive_record.isEmpty())) {
+                            result = self->archive_operation(archive_record);
+                        } else if (sources) {
+                            if (self->archive_pending())
+                                throw std::runtime_error("Finish archiving the previous transfer first");
                             if (self->journal.read().status != DurableJournalStatus::not_found ||
                                 CurrentOperationJournalStore(self->child_path()).read().status !=
                                     DurableJournalStatus::not_found)
@@ -874,6 +1028,20 @@ bool ObjectTransferQueue::resume(Progress progress, Conflict conflict, Completio
     return state_->launch(std::nullopt, FileTransferKind::copy, {}, std::move(progress),
                           std::move(conflict), std::move(completion));
 }
+bool ObjectTransferQueue::archive(QByteArray expected_payload_sha256, Completion completion) {
+    if (expected_payload_sha256.size() != 32) return false;
+    return state_->launch(std::nullopt, FileTransferKind::copy, {},
+        [](FileTransferProgressUpdate) {}, [](FileTransferConflict, bool, bool) {},
+        std::move(completion), std::move(expected_payload_sha256));
+}
+bool ObjectTransferQueue::archive_pending() const { return state_->archive_pending(); }
+#ifdef VOVE_UI_TEST_HOOKS
+void ObjectTransferQueue::set_archive_checkpoint_for_testing(std::function<void(int)> checkpoint) {
+    std::scoped_lock lock(state_->mutex);
+    if (state_->running) throw std::logic_error("Cannot replace a running archive checkpoint");
+    state_->archive_checkpoint = std::move(checkpoint);
+}
+#endif
 void ObjectTransferQueue::resolve_conflict(FileTransferConflictDecision decision) {
     {
         std::scoped_lock lock(state_->mutex);

@@ -1419,6 +1419,13 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     get_target_property(vove_pane_test_sources vove-qt-shell-tests SOURCES)
     add_test(NAME vove-navigation-tests COMMAND vove-qt-shell-tests)
     add_test(NAME vove-mixed-transfer-ui-tests COMMAND vove-qt-shell-tests)
+    add_test(NAME vove-object-recovery-ui-tests COMMAND vove-qt-shell-tests)
+    set_tests_properties(vove-object-recovery-ui-tests PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_OBJECT_RECOVERY_ONLY=1" TIMEOUT 45)
+    if(WIN32)
+        set_tests_properties(vove-object-recovery-ui-tests PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
+    endif()
     add_test(NAME vove-search-dnd-ui-tests COMMAND vove-qt-shell-tests)
     set_tests_properties(vove-search-dnd-ui-tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_SEARCH_DND_ONLY=1" TIMEOUT 240)
@@ -1447,15 +1454,19 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     target_include_directories(vove-object-transfer-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(vove-object-transfer-tests PRIVATE vove::fileops vove::platform Qt6::Core)
     target_compile_definitions(vove-object-transfer-tests PRIVATE
+        VOVE_UI_TEST_HOOKS=1
         VOVE_TEST_CATALOG_HELPER_PATH="$<TARGET_FILE:vove-catalog-helper>"
         VOVE_TEST_FILEOP_HELPER_PATH="$<TARGET_FILE:vove-fileop-helper>")
     add_dependencies(vove-object-transfer-tests vove-catalog-helper vove-fileop-helper)
     vove_copy_cxx_runtime(vove-object-transfer-tests)
     vove_enable_warnings(vove-object-transfer-tests)
     add_test(NAME vove-object-transfer-tests COMMAND vove-object-transfer-tests)
+    add_test(NAME vove-object-archive-tests COMMAND vove-object-transfer-tests)
+    set_tests_properties(vove-object-archive-tests PROPERTIES
+        ENVIRONMENT "VOVE_OBJECT_ARCHIVE_ONLY=1" TIMEOUT 60)
     set_tests_properties(vove-object-transfer-tests PROPERTIES TIMEOUT 240)
     if(WIN32)
-        set_tests_properties(vove-object-transfer-tests PROPERTIES ENVIRONMENT_MODIFICATION
+        set_tests_properties(vove-object-transfer-tests vove-object-archive-tests PROPERTIES ENVIRONMENT_MODIFICATION
             "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>\;PATH=path_list_prepend:${VOVE_CXX_RUNTIME_DIR}")
     endif()
     set_tests_properties(vove-navigation-tests PROPERTIES

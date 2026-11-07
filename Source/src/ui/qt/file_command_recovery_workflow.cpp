@@ -21,11 +21,11 @@ CurrentOperationJournalState FileCommandController::Impl::refresh_current_operat
         (loaded_operation.kind == fileops::CurrentOperationKind::trash_move ||
          loaded_operation.kind == fileops::CurrentOperationKind::trash_restore ||
          loaded_operation.kind == fileops::CurrentOperationKind::trash_purge);
-    const auto transfer_recovery =
+    const auto transfer_recovery = objectTransferQueue_.archive_pending() || (
         loaded_operation.ok() &&
         loaded_operation.encoding == fileops::CurrentOperationJournalEncoding::typed &&
         (loaded_operation.kind == fileops::CurrentOperationKind::file_transfer ||
-         loaded_operation.kind == fileops::CurrentOperationKind::object_transfer);
+         loaded_operation.kind == fileops::CurrentOperationKind::object_transfer));
     const auto journal_blocked =
         loaded_operation.status != fileops::DurableJournalStatus::not_found && !delete_recovery &&
         !batch_recovery && !trash_recovery && !transfer_recovery;
@@ -534,6 +534,10 @@ void FileCommandController::Impl::show_unfinished_operation_dialog() {
     if (state == CurrentOperationJournalState::none ||
         !operation_availability().unfinished_operation_allowed()) return;
     const auto loaded = fileops::CurrentOperationJournalStore(currentOperationJournalPath_).read();
+    const auto archiving = objectTransferQueue_.archive_pending();
+    const auto object_transfer = archiving || (loaded.ok() &&
+        loaded.encoding == fileops::CurrentOperationJournalEncoding::typed &&
+        loaded.kind == fileops::CurrentOperationKind::object_transfer);
     fileops::TrashTransaction transaction;
     std::string detail;
     const auto is_trash = loaded.ok() &&
@@ -577,12 +581,27 @@ void FileCommandController::Impl::show_unfinished_operation_dialog() {
         }
     } else {
         add_label(operationStatus_);
+        if (object_transfer) {
+            const auto value = QJsonDocument::fromJson(QByteArray(
+                reinterpret_cast<const char *>(loaded.payload.data()), qsizetype(loaded.payload.size()))).object();
+            const auto items = value.value("items").toArray();
+            const auto index = value.value("index").toInteger(-1);
+            if (index >= 0 && index < items.size()) {
+                const auto item = items[index].toObject();
+                add_label(item.value("source").toString() + QStringLiteral("\n") +
+                          item.value("destination").toString());
+            }
+            const auto detail = property("objectTransferDetail").toString();
+            if (!detail.isEmpty()) add_label(detail);
+        }
     }
-    add_label(cancellable
+    add_label(object_transfer
+        ? text("Archiving stops further recovery, not the files. Sources, destinations and partial copies stay in place. The unfinished result remains unknown; a local receipt preserves the operation records.")
+        : cancellable
         ? text("Already moved items stay in Trash. Remaining source files stay in place.")
         : text("This operation can be retried; cancelling it here is not supported."));
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-    auto *retry = buttons->addButton(text("Retry recovery"), QDialogButtonBox::ActionRole);
+    auto *retry = buttons->addButton(text(archiving ? "Finish archiving" : "Retry recovery"), QDialogButtonBox::ActionRole);
     retry->setObjectName(QStringLiteral("retryRecoveryButton"));
     retry->setAutoDefault(false);
     connect(retry, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(1); });
@@ -592,19 +611,41 @@ void FileCommandController::Impl::show_unfinished_operation_dialog() {
         cancel->setAutoDefault(false);
         connect(cancel, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(2); });
     }
+    if (object_transfer && !archiving) {
+        auto *archive = buttons->addButton(text("Archive unfinished transfer"), QDialogButtonBox::ActionRole);
+        archive->setObjectName(QStringLiteral("archiveUnfinishedTransferButton"));
+        archive->setAutoDefault(false);
+        connect(archive, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(3); });
+    }
     auto *close = buttons->button(QDialogButtonBox::Close);
     close->setDefault(true);
     close->setFocus();
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
     const auto choice = dialog.exec();
+    if (object_transfer && (choice == 1 || choice == 3) && ports_.prepare_recovery_catalog)
+        ports_.prepare_recovery_catalog();
     if (choice == 1) {
-        if (ports_.refresh_catalog) ports_.refresh_catalog();
+        if (object_transfer) {
+            if (!start_object_transfer({}, {}, fileops::FileTransferKind::copy, true)) {
+                operationStatus_ = text("The operation could not be started. Its record was kept.");
+                publish_status();
+            }
+        } else if (ports_.refresh_catalog) ports_.refresh_catalog();
         else static_cast<void>(refresh_or_recover());
     }
     else if (choice == 2 && !submit_trash_recovery(true)) {
         operationStatus_ = text("The operation could not be started. Its record was kept.");
         publish_status();
+    }
+    else if (choice == 3) {
+        const auto payload = QByteArray(reinterpret_cast<const char *>(loaded.payload.data()),
+                                        qsizetype(loaded.payload.size()));
+        if (!start_object_transfer({}, {}, fileops::FileTransferKind::copy, true,
+                QCryptographicHash::hash(payload, QCryptographicHash::Sha256))) {
+            operationStatus_ = text("The operation could not be started. Its record was kept.");
+            publish_status();
+        }
     }
 }
 

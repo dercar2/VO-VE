@@ -29,6 +29,8 @@ enum class DurableJournalReadSource : std::uint8_t {
     previous,
 };
 
+enum class DurableJournalGeneration : std::uint8_t { primary, previous, temporary };
+
 struct DurableJournalResult {
     DurableJournalStatus status{DurableJournalStatus::io_error};
     std::error_code error;
@@ -53,6 +55,11 @@ class DurableJournalStore final {
     [[nodiscard]] DurableJournalReadResult read() const;
     [[nodiscard]] DurableJournalReadResult read_primary_generation() const;
     [[nodiscard]] DurableJournalReadResult read_previous_generation() const;
+    // Archival uses exact bounded bytes, including a damaged envelope. The caller must hold
+    // the operation lease and durably preserve them before conditional retirement.
+    [[nodiscard]] DurableJournalReadResult read_physical_generation(DurableJournalGeneration) const;
+    [[nodiscard]] DurableJournalResult remove_physical_generation_if_matches(
+        DurableJournalGeneration, std::span<const std::byte> expected_bytes) const;
     [[nodiscard]] DurableJournalResult remove() const;
     [[nodiscard]] DurableJournalResult
     remove_if_payload_matches(std::span<const std::byte> expected_payload) const;

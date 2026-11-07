@@ -186,6 +186,12 @@ void CatalogController::open_directory(const QString &path) {
     update_.state = catalog::CatalogSessionState::loading;
     notify();
 }
+void CatalogController::leave_trash_for_recovery() {
+    if (!trash_active()) return;
+    if (callbacks_.leave_trash) callbacks_.leave_trash();
+    leave_trash();
+    navigation_->open(path_, false);
+}
 void CatalogController::refresh() {
     if (trash_active()) {
         const auto state = commands_->refresh_current_operation_journal_state();
@@ -193,9 +199,7 @@ void CatalogController::refresh() {
             if (callbacks_.refresh_trash) callbacks_.refresh_trash();
             return;
         }
-        if (callbacks_.leave_trash) callbacks_.leave_trash();
-        leave_trash();
-        navigation_->open(path_, false);
+        leave_trash_for_recovery();
     }
     if (commands_->refresh_or_recover()) { notify(); return; }
     if (search_active()) { start_search(); return; }

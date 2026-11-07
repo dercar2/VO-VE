@@ -84,6 +84,7 @@ struct FileCommandPorts {
     std::function<void()> refresh_directory_sources;
     // Retry uses the same mode-transition boundary as the user's F5 command.
     std::function<void()> refresh_catalog;
+    std::function<void()> prepare_recovery_catalog;
     // -1 preserves the current poll interval.
     std::function<void(int interval_ms)> poll_catalog;
     std::function<void(const QStringList &paths)> reveal_paths;

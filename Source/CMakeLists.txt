@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(VO_VE VERSION 1.0.0 LANGUAGES C CXX)
+project(VO_VE VERSION 1.0.1 LANGUAGES C CXX)
 
 option(VOVE_BUILD_TESTS "Build headless core tests" ON)
 option(VOVE_BUILD_BENCHMARKS "Build headless benchmarks" ON)

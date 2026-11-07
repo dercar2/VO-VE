@@ -150,7 +150,7 @@ class FileCommandController::Impl final : public QObject {
         const QString &destination, const fileops::FileTransferKind kind);
     bool start_object_transfer(const QList<core::DirectoryEntry> &entries,
         const QString &destination, const fileops::FileTransferKind kind,
-        const bool resume = false);
+        const bool resume = false, const QByteArray &archive_record = {});
     bool start_file_transfer(const QList<core::DirectoryEntry> &entries,
         const QString &destination_directory,
         const fileops::FileTransferKind kind);

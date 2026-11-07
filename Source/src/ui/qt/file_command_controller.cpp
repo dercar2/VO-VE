@@ -430,7 +430,7 @@ OperationAvailability FileCommandController::Impl::operation_availability() cons
             createDirectoryInFlight_ || fileOperationService_.busy() ||
             batchRenameCoordinator_.busy() || permanentDeleteCoordinator_.busy() ||
             trashCoordinator_.busy() || fileTransferCoordinator_.busy() ||
-            directoryTransferService_.busy(),
+            directoryTransferService_.busy() || objectTransferQueue_.busy(),
         .pending_rename = pendingRenameOperation_.has_value(),
         .external_drop_pending = pendingExternalDirectoryDrop_.has_value() ||
                                  pendingExternalTransferDrop_.has_value(),
@@ -560,7 +560,7 @@ bool FileCommandController::Impl::refresh_or_recover() {
 if (renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
         batchRenameCoordinator_.busy() || fileTransferCoordinator_.busy() ||
         directoryTransferService_.busy() || permanentDeleteCoordinator_.busy() ||
-        trashCoordinator_.busy()) {
+        trashCoordinator_.busy() || objectTransferQueue_.busy()) {
         operationStatus_ =
             QCoreApplication::translate("MainWindow", "Waiting for the file operation result…");
         publish_status();
@@ -588,7 +588,7 @@ if (renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryIn
     }
     if (journal_state == CurrentOperationJournalState::transfer_recovery &&
         !fileTransferCoordinator_.owns_recovery()) {
-        static_cast<void>(start_object_transfer({}, {}, fileops::FileTransferKind::copy, true));
+        show_unfinished_operation_dialog();
         return true;
     }
     if (fileTransferCoordinator_.owns_recovery()) {

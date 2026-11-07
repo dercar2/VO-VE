@@ -145,6 +145,7 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
     ports.clear_selection = [this] { preview_->clearSelection(); };
     ports.refresh_directory_sources = [this] { catalog_->refresh_directory_sources(); };
     ports.refresh_catalog = [this] { catalog_->refresh(); };
+    ports.prepare_recovery_catalog = [this] { catalog_->leave_trash_for_recovery(); };
     ports.poll_catalog = [this](int interval) { catalog_->resume_polling(interval); };
     ports.reveal_paths = [this](const QStringList &paths) { navigation_->reveal_after_refresh(paths); };
     ports.refresh_after_rename = [this](const QString &path) { refresh_after_rename({path}); };

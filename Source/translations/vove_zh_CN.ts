@@ -3455,6 +3455,11 @@ Stage: %2</source>
     <message><source>This operation can be retried; cancelling it here is not supported.</source><translation>可以重试恢复此操作，但不支持在此处取消。</translation></message>
     <message><source>Retry recovery</source><translation>重试恢复</translation></message>
     <message><source>Cancel remaining moves</source><translation>取消剩余移动</translation></message>
+    <message><source>Archive unfinished transfer</source><translation>归档未完成的传输</translation></message>
+    <message><source>Finish archiving</source><translation>完成归档</translation></message>
+    <message><source>Archiving stops further recovery, not the files. Sources, destinations and partial copies stay in place. The unfinished result remains unknown; a local receipt preserves the operation records.</source><translation>归档只停止继续恢复，不会删除文件。源文件、目标和部分副本均保留原位。未完成部分的结果仍不确定；操作记录保存在本地凭据中。</translation></message>
+    <message><source>Unfinished transfer archived; files and partial copies were kept. Receipt: %1</source><translation>未完成的传输已归档；文件和部分副本已保留。凭据：%1</translation></message>
+    <message><source>Transfer paused: %1. Press F5 or open Unfinished operation… to choose an action.</source><translation>传输已暂停：%1。按 F5 或打开“未完成的操作…”选择操作。</translation></message>
     <message><source>The operation could not be started. Its record was kept.</source><translation>无法启动操作。其记录已保留。</translation></message>
 </context>
 </TS>

@@ -1,7 +1,7 @@
-# VO-VE 1.0.0 Distribution
+# VO-VE 1.0.1 Distribution
 
-Application source commit: 34b955569a617e1422a9bfe66ebeb13f214fa252.
-Build label: BETA-20261028.
+Application source commit: 78a7cceb280200b66958cd19470c7c335c9acbaa.
+Build label: RECOVERY-20261107.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 The application snapshot is in Source/ in this release tag's automatic ZIP and TAR.GZ archives.

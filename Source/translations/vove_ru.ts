@@ -3461,6 +3461,11 @@ Stage: %2</source>
     <message><source>This operation can be retried; cancelling it here is not supported.</source><translation>Можно повторить восстановление этой операции. Её отмена в этом окне не поддерживается.</translation></message>
     <message><source>Retry recovery</source><translation>Повторить восстановление</translation></message>
     <message><source>Cancel remaining moves</source><translation>Отменить оставшееся перемещение</translation></message>
+    <message><source>Archive unfinished transfer</source><translation>Архивировать незавершённый перенос</translation></message>
+    <message><source>Finish archiving</source><translation>Завершить архивирование</translation></message>
+    <message><source>Archiving stops further recovery, not the files. Sources, destinations and partial copies stay in place. The unfinished result remains unknown; a local receipt preserves the operation records.</source><translation>Архивирование прекращает восстановление операции, но не удаляет файлы. Источники, назначения и частичные копии остаются на месте. Результат незавершённой части остаётся неизвестным; записи операции сохраняются в локальной квитанции.</translation></message>
+    <message><source>Unfinished transfer archived; files and partial copies were kept. Receipt: %1</source><translation>Незавершённый перенос архивирован; файлы и частичные копии сохранены. Квитанция: %1</translation></message>
+    <message><source>Transfer paused: %1. Press F5 or open Unfinished operation… to choose an action.</source><translation>Перенос приостановлен: %1. Нажмите F5 или откройте «Незавершённая операция…», чтобы выбрать действие.</translation></message>
     <message><source>The operation could not be started. Its record was kept.</source><translation>Не удалось запустить операцию. Её запись сохранена.</translation></message>
 </context>
 </TS>
