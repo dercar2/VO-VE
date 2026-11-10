@@ -164,10 +164,10 @@ void CatalogController::prepare_navigation() {
         leave_trash();
     }
     if (search_active() || !views_.global_search->text().isEmpty()) {
-        const QSignalBlocker blocker(views_.global_search);
-        views_.global_search->clear();
         leave_search(false);
+        views_.global_search->clear();
     }
+    views_.filter->clear();
 }
 void CatalogController::open_directory(const QString &path) {
     prepare_navigation();
