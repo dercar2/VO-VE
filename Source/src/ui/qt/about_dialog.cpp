@@ -151,7 +151,7 @@ AboutDialog::AboutDialog(const QString &version, QWidget *parent) : QDialog(pare
     html += QStringLiteral("<h3>%1</h3><p>%2: %3<br>%4: %5</p><p>%6</p>")
                 .arg(ui_text(UiTextId::contributors_title).toHtmlEscaped(),
                      about_text(QT_TRANSLATE_NOOP("AboutDialog", "Design")),
-                     link(QStringLiteral("mailto:dercar@ya.com"), QStringLiteral("dercar")),
+                     link(QStringLiteral("mailto:mail@dercar.pro"), QStringLiteral("dercar")),
                      about_text(QT_TRANSLATE_NOOP("AboutDialog", "Programming")),
                      link(QStringLiteral("mailto:Rubilaxik@ya.com"), QStringLiteral("Rubilaks")),
                      ui_text(UiTextId::contributors_summary).toHtmlEscaped());
@@ -215,7 +215,7 @@ AboutDialog::AboutDialog(const QString &version, QWidget *parent) : QDialog(pare
     }
     connect(details, &QTextBrowser::anchorClicked, this, [repository_url](const QUrl &url) {
         if (url == QUrl(QStringLiteral("https://vo-ve.ru")) || url == repository_url ||
-            url == QUrl(QStringLiteral("mailto:dercar@ya.com")) ||
+            url == QUrl(QStringLiteral("mailto:mail@dercar.pro")) ||
             url == QUrl(QStringLiteral("mailto:Rubilaxik@ya.com")) ||
             url == QUrl(QStringLiteral("https://www.voidtools.com/"))) {
             QDesktopServices::openUrl(url);

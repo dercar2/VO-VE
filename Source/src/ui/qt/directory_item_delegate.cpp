@@ -283,7 +283,7 @@ void DirectoryItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem 
     painter->setFont(option.font);
     painter->setPen(directory ? folderTextColor_ : fileTextColor_);
     painter->drawText(name_rect, Qt::AlignLeading | Qt::AlignVCenter,
-                      metrics.elidedText(base_name, Qt::ElideMiddle, name_rect.width()));
+                      metrics.elidedText(base_name, Qt::ElideRight, name_rect.width()));
 
     if (!suffix.isEmpty()) {
         painter->setFont(extension_font);

@@ -62,7 +62,7 @@ void show_project_contact_dialog(QWidget *owner, const bool support) {
         layout->addWidget(message);
     }
 
-    QStringList emails{QStringLiteral("dercar@ya.com")};
+    QStringList emails{QStringLiteral("mail@dercar.pro")};
     if (support) emails.append(QStringLiteral("Rubilaxik@ya.com"));
     QStringList links;
     for (const auto &email : emails) {

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "generator": {
     "path": "scripts/generate_installer_artwork.py",
     "sha256": "87c4791ca714d903f7757b0394a636570a940b10f69f6f118454cf3c3d6618e4"
@@ -26,13 +26,13 @@
   "files": [
     {
       "path": "installer-background-en.png",
-      "bytes": 156525,
-      "sha256": "508f801cfc7933c4a9eb7efa75772dfd9748739d165b1797326e7187436fd143"
+      "bytes": 156655,
+      "sha256": "0e762ae2a7168fb2b589410a57b802e4f621f53e9fc2b25d8fbd9a7678b74157"
     },
     {
       "path": "installer-background-ru.png",
-      "bytes": 174356,
-      "sha256": "3880cfb4ab60e2f87a92697c231848877d9e1e8835f53234684a291e0aa4b989"
+      "bytes": 174461,
+      "sha256": "2be9ac30f6e06858db0073ef421fe73650fb19de22722279425f07fc6d3bbcf6"
     },
     {
       "path": "installer-download-disabled-en.png",

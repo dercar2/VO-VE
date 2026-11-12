@@ -1,7 +1,7 @@
-# VO-VE 1.0.2 Distribution
+# VO-VE 1.0.3 Distribution
 
-Application source commit: feaeee27c190d7dd735df57980ccd60978aedeba.
-Build label: SEARCH-NAV-20261110.
+Application source commit: 79b451a81118d8ae36a8a4f2b6fde792e9ac622d.
+Build label: UI-POLISH-20261112.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 The application snapshot is in Source/ in this release tag's automatic ZIP and TAR.GZ archives.
