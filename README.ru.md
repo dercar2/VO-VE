@@ -12,7 +12,7 @@ NAS. Программа помогает быстро найти нужный м
 - Сайт: [vo-ve.ru](https://vo-ve.ru) (пока не готов)
 - Репозиторий: [github.com/dercar2/VO-VE](https://github.com/dercar2/VO-VE)
 - Сообщить о проблеме: [GitHub Issues](https://github.com/dercar2/VO-VE/issues)
-- Версия: **1.0.2**
+- Версия: **1.0.3**
 - Сборка: **Beta**
 - Платформы текущей поставки: **Windows x64 и Linux amd64**
 
@@ -148,14 +148,14 @@ VO-VE не заменяет Photoshop, CorelDRAW, InDesign, Affinity, GIMP ил�
 Готовые сборки находятся в отдельном разделе
 [Releases](https://github.com/dercar2/VO-VE/releases), а не среди файлов исходного кода.
 
-Текущая версия: **[VO-VE 1.0.2](https://github.com/dercar2/VO-VE/releases/tag/v1.0.2)**.
+Текущая версия: **[VO-VE 1.0.3](https://github.com/dercar2/VO-VE/releases/tag/v1.0.3)**.
 
-- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v1.0.2/VO-VE-1.0.2-windows-x64-setup.exe)
-- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v1.0.2/vo-ve_1.0.2_amd64.deb)
-- [Исходники 1.0.2](https://github.com/dercar2/VO-VE/tree/v1.0.2/Source)
+- [Установщик Windows x64](https://github.com/dercar2/VO-VE/releases/download/v1.0.3/VO-VE-1.0.3-windows-x64-setup.exe)
+- [Linux amd64: пакет DEB](https://github.com/dercar2/VO-VE/releases/download/v1.0.3/vo-ve_1.0.3_amd64.deb)
+- [Исходники 1.0.3](https://github.com/dercar2/VO-VE/tree/v1.0.3/Source)
 - [Лицензии и уведомления](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-notices.zip)
 - [Исходники зависимостей](https://github.com/dercar2/VO-VE/releases/download/v0.2.16/VO-VE-0.2.13-dependency-sources.zip) (для сборки, не нужны при обычной установке)
-- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v1.0.2/SHA256SUMS.txt)
+- [Контрольные суммы SHA-256](https://github.com/dercar2/VO-VE/releases/download/v1.0.3/SHA256SUMS.txt)
 
 В Windows используется единый установщик `.exe`. В Linux текущая поставка собирается как пакет `.deb` для amd64. Дополнительные компоненты не маскируются под часть VO-VE и устанавливаются только
 по явному выбору пользователя.
@@ -178,7 +178,7 @@ cmake --build --preset source-release
 `Source/THIRD_PARTY_NOTES.md` и `Source/docs/dependencies`.
 Точные исходники внешних зависимостей доступны отдельным вложением
 `VO-VE-0.2.13-dependency-sources.zip` на странице релиза.
-Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером базовой поставки 0.2.13. Для самого приложения используйте исходники 1.0.2.
+Зависимости не изменились: архив их исходников и архив лицензий сохранены побайтно с номером базовой поставки 0.2.13. Для самого приложения используйте исходники 1.0.3.
 
 ## Состояние Проекта
 
@@ -189,7 +189,7 @@ VO-VE находится на стадии **Beta**. Основная функц
 
 ## Авторы
 
-- Автор идеи и дизайн: **dercar** - [dercar@ya.com](mailto:dercar@ya.com)
+- Автор идеи и дизайн: **dercar** - [mail@dercar.pro](mailto:mail@dercar.pro)
 - Программирование: **Rubilaks**
 - Участники: пока сторонних участников нет
 
