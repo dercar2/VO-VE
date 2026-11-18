@@ -49,7 +49,7 @@ bool FileCommandController::Impl::start_transfer_selection(const QList<core::Dir
 
 bool FileCommandController::Impl::start_object_transfer(const QList<core::DirectoryEntry> &entries,
                                         const QString &destination, const fileops::FileTransferKind kind,
-                                        const bool resume, const QByteArray &archive_record) {
+                                        const bool resume, const std::optional<QByteArray> &archive_record) {
     if (renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
         fileOperationService_.busy() || pendingRenameOperation_ || batchRenameCoordinator_.busy() ||
         permanentDeleteCoordinator_.busy() || trashCoordinator_.busy() ||
@@ -72,21 +72,22 @@ bool FileCommandController::Impl::start_object_transfer(const QList<core::Direct
             if (window) window->handle_file_transfer_conflict(value, true, overwrite_allowed, copy_allowed);
         }, Qt::QueuedConnection);
     };
-    const auto completion = [window](ObjectTransferResult result) {
-        if (window) QMetaObject::invokeMethod(window, [window, result = std::move(result)] {
+    const auto stopping = archive_record.has_value();
+    const auto completion = [window, stopping](ObjectTransferResult result) {
+        if (window) QMetaObject::invokeMethod(window, [window, stopping, result = std::move(result)] {
             if (!window) return;
             window->set_transfer_in_flight(false);
             window->notify_file_in_use(result.operation_status);
             static_cast<void>(window->refresh_current_operation_journal_state());
             if (result.archived) {
                 window->operationStatus_ = QCoreApplication::translate("TrashRecoveryDialog",
-                    "Unfinished transfer archived; files and partial copies were kept. Receipt: %1")
+                    "Operation stopped. Files were left as they are; the previous result is unknown. Record: %1")
                     .arg(result.archive_receipt);
             } else if (result.success) {
                 window->operationStatus_ = QCoreApplication::translate("MainWindow", "Objects transferred: %1").arg(result.completed);
             } else if (result.recovery) {
                 window->operationStatus_ = QCoreApplication::translate("TrashRecoveryDialog",
-                    "Transfer paused: %1. Press F5 or open Unfinished operation… to choose an action.")
+                    "Transfer paused: %1. Press F5 to choose an action.")
                     .arg(result.detail);
             } else if (result.cancelled) {
                 window->operationStatus_ = QCoreApplication::translate("MainWindow", "Transfer cancelled. Objects transferred: %1").arg(result.completed);
@@ -94,6 +95,10 @@ bool FileCommandController::Impl::start_object_transfer(const QList<core::Direct
                 window->operationStatus_ = QCoreApplication::translate("MainWindow", "Cannot transfer the selected objects: %1").arg(result.detail);
             }
             window->set_property("objectTransferDetail", result.detail);
+            if (stopping || result.archived) {
+                window->publish_status();
+                return;
+            }
             if (window->catalog().global_search) window->ports_.mark_saved_search_dirty();
             for (const auto &path : result.published_paths)
                 window->allow_observed_global_search_path(path);
@@ -107,7 +112,7 @@ bool FileCommandController::Impl::start_object_transfer(const QList<core::Direct
                 window->schedule_global_search();
         }, Qt::QueuedConnection);
     };
-    const auto submitted = !archive_record.isEmpty() ? objectTransferQueue_.archive(archive_record, completion)
+    const auto submitted = archive_record ? objectTransferQueue_.archive(*archive_record, completion)
         : resume ? objectTransferQueue_.resume(progress, conflict, completion)
         : objectTransferQueue_.start(kind, {entries.begin(), entries.end()}, native_path(destination), progress, conflict, completion);
     if (!submitted) set_transfer_in_flight(false);
@@ -751,11 +756,14 @@ bool FileCommandController::Impl::record_directory_transfer_completion() {
 }
 
 void FileCommandController::Impl::handle_directory_transfer_result(
-    const fileops::BasicDirectoryTransferResult &result) {
+    const fileops::BasicDirectoryTransferResult &result, const bool recovering) {
     if (result.status == fileops::BasicDirectoryTransferStatus::file_in_use)
         notify_file_in_use(fileops::OperationStatus::file_in_use);
+    // Failure to enumerate the recovery parent is not evidence of an absent operation.
+    const bool no_recovery_data = recovering && result.status == fileops::BasicDirectoryTransferStatus::not_found &&
+                                  !result.recovery_available;
     if (!directoryTransferDiscarding_ && (result.ok() ||
-        (directoryTransferCompletionKnown_ && result.status == fileops::BasicDirectoryTransferStatus::not_found))) {
+        (directoryTransferCompletionKnown_ && no_recovery_data))) {
         allow_observed_global_search_path(directoryTransferRecoveryDestination_);
         if (pendingDirectoryTransferBatch_ && pendingDirectoryTransferBatch_->kind == fileops::FileTransferKind::move)
             reconcile_global_search_move({directoryTransferRecoverySource_});
@@ -763,11 +771,12 @@ void FileCommandController::Impl::handle_directory_transfer_result(
     }
     if (directoryTransferDiscarding_) {
         set_transfer_in_flight(false);
-        if (result.ok() || result.status == fileops::BasicDirectoryTransferStatus::not_found) {
+        if (result.ok() || no_recovery_data) {
             pendingDirectoryTransferBatch_.reset();
             clear_directory_transfer_recovery_state();
             operationStatus_ =
-                QCoreApplication::translate("MainWindow", "Incomplete data was safely deleted");
+                result.ok() ? QCoreApplication::translate("MainWindow", "Incomplete data was safely deleted")
+                            : QCoreApplication::translate("MainWindow", "No recovery data found. Local queue closed.");
             refresh_directory_sources();
             poll_catalog();
             publish_status();
@@ -787,14 +796,13 @@ void FileCommandController::Impl::handle_directory_transfer_result(
                       .arg(directory_transfer_error_text(result.status));
         operationStatus_ +=
             choice_persisted ? QCoreApplication::translate(
-                                   "MainWindow", ". Your choice was saved; press F5 to retry")
+                                   "MainWindow", ". Press F5 to choose an action")
                              : QCoreApplication::translate("MainWindow",
                                                            ". Failed to update the recovery state");
         publish_status();
         return;
     }
-    if (directoryTransferCompletionKnown_ &&
-        result.status == fileops::BasicDirectoryTransferStatus::not_found) {
+    if (directoryTransferCompletionKnown_ && no_recovery_data) {
         if (advance_directory_transfer_batch_after_success()) {
             return;
         }
@@ -809,7 +817,7 @@ void FileCommandController::Impl::handle_directory_transfer_result(
         return;
     }
     if (!directoryTransferCompletionKnown_ && pendingDirectoryTransferBatch_ &&
-        result.status == fileops::BasicDirectoryTransferStatus::not_found) {
+        no_recovery_data) {
         set_transfer_in_flight(false);
         directoryTransferRecoveryManifest_.clear();
         directoryTransferDiscarding_ = false;
@@ -847,12 +855,11 @@ void FileCommandController::Impl::handle_directory_transfer_result(
             operationStatus_ +=
                 retryable
                     ? QCoreApplication::translate("MainWindow", ". Check the network and press F5")
-                    : QCoreApplication::translate("MainWindow", ". Incomplete data was kept");
+                    : QCoreApplication::translate("MainWindow", ". Press F5 to choose an action");
         }
         begin_preview_generation(false);
         ports_.mark_all_previews_unverified();
         publish_status();
-        offer_directory_transfer_discard();
         return;
     }
     if (result.ok()) {

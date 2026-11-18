@@ -437,8 +437,6 @@ void WindowShell::build_ui() {
     widgets_.componentsAction->setObjectName(QStringLiteral("componentsAction"));
     widgets_.updateAction = widgets_.mainMenu->addAction(QString());
     widgets_.updateAction->setObjectName(QStringLiteral("updateAction"));
-    widgets_.unfinishedOperationAction = widgets_.mainMenu->addAction(QString());
-    widgets_.unfinishedOperationAction->setObjectName(QStringLiteral("unfinishedOperationAction"));
     widgets_.mainMenu->addSeparator();
     widgets_.aboutAction = widgets_.mainMenu->addAction(QString());
     widgets_.aboutAction->setObjectName(QStringLiteral("aboutAction"));
@@ -872,8 +870,6 @@ void WindowShell::retranslate() {
     widgets_.createFolderAction->setText(QCoreApplication::translate("MainWindow", "Create Folder"));
     widgets_.languageMenu->setTitle(ui_text(UiTextId::language));
     widgets_.settingsAction->setText(ui_text(UiTextId::settings));
-    widgets_.unfinishedOperationAction->setText(
-        QCoreApplication::translate("TrashRecoveryDialog", "Unfinished operation…"));
     widgets_.updateAction->setText(ui_text(UiTextId::check_updates));
     widgets_.aboutAction->setText(ui_text(UiTextId::about));
     widgets_.componentsAction->setText(ui_text(UiTextId::components));

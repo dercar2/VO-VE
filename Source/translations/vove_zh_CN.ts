@@ -2286,6 +2286,34 @@ Actions apply to the complete deletion operation</source>
         <translation>删除未完成的数据</translation>
     </message>
     <message>
+        <source>. Press F5 to choose an action</source>
+        <translation>。按 F5 选择操作。</translation>
+    </message>
+    <message>
+        <source>No recovery data found. Local queue closed.</source>
+        <translation>未找到恢复数据。本地队列已关闭。</translation>
+    </message>
+    <message>
+        <source>Choose what to do with this unfinished folder transfer.</source>
+        <translation>请选择如何处理未完成的文件夹传输。</translation>
+    </message>
+    <message>
+        <source>Archive local operation without continuing</source>
+        <translation>归档本地操作，不再继续</translation>
+    </message>
+    <message>
+        <source>Save the local recovery record and unlock file commands? No files will be moved or deleted. Hidden transfer data will stay in place.</source>
+        <translation>保存本地恢复记录并解锁文件操作？不会移动或删除任何文件，隐藏的传输数据将保留在原处。</translation>
+    </message>
+    <message>
+        <source>Could not archive the local recovery record. Check the unfinished operation.</source>
+        <translation>无法归档本地恢复记录。请检查未完成的操作。</translation>
+    </message>
+    <message>
+        <source>Local operation archived. Transfer outcome is unknown; no files were changed.</source>
+        <translation>本地操作已归档。传输结果未知，归档未更改任何文件。</translation>
+    </message>
+    <message>
         <location filename="../src/ui/qt/main_window.cpp" line="6265"/>
         <source>Failed to save the selected action</source>
         <translation>无法保存所选操作</translation>
@@ -3446,6 +3474,20 @@ Stage: %2</source>
 </context>
 <context>
     <name>TrashRecoveryDialog</name>
+    <message><source>Retry</source><translation>重试</translation></message>
+    <message><source>Close</source><translation>关闭</translation></message>
+    <message><source>Finish stopping</source><translation>完成停止操作</translation></message>
+    <message><source>Stop and leave files as they are…</source><translation>停止并保持文件原样…</translation></message>
+    <message><source>Retry will check whether unfinished data can be safely removed.</source><translation>重试时会检查是否可以安全删除未完成的数据。</translation></message>
+    <message><source>Record location after stopping: %1</source><translation>停止后的记录路径：%1</translation></message>
+    <message><source>Stop processing the remaining queue? Original files, destinations and hidden partial copies will stay where they are. You do not need to do anything else to use VO-VE.</source><translation>要停止处理剩余队列吗？原始文件、目标和隐藏的部分副本将留在原处。要继续使用 VO-VE，无需执行其他操作。</translation></message>
+    <message><source>Operation stopped. Files were left as they are; the previous result is unknown. No action is needed.</source><translation>操作已停止。文件保持原样，先前结果未知。无需进一步操作。</translation></message>
+    <message><source>Operation stopped. Files were left as they are; the previous result is unknown. Record: %1</source><translation>操作已停止。文件保持原样，先前结果未知。记录：%1</translation></message>
+    <message><source>Stopping leaves original files, destinations and hidden partial copies in place. The outcome remains unknown. You do not need to do anything else to use VO-VE.</source><translation>原始文件、目标和隐藏的部分副本将留在原处。结果未知。要继续使用 VO-VE，无需执行其他操作。</translation></message>
+    <message><source>The record cannot be safely read. No action was taken. Copy its location for support.</source><translation>无法安全读取记录。未执行任何操作。请复制记录的位置以便诊断。</translation></message>
+    <message><source>Copy records folder path</source><translation>复制记录文件夹路径</translation></message>
+    <message><source>Path copied</source><translation>已复制路径</translation></message>
+    <message><source>Transfer paused: %1. Press F5 to choose an action.</source><translation>传输已暂停：%1。按 F5 选择操作。</translation></message>
     <message><source>Unfinished operation…</source><translation>未完成的操作…</translation></message>
     <message><source>Trash permissions differ from the recorded state</source><translation>回收站权限与记录的状态不同</translation></message>
     <message><source>Trash records do not match; recovery is required</source><translation>回收站记录不一致；需要恢复</translation></message>

@@ -207,6 +207,8 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
         DurableJournalStore intent(archive_intent_path(), kAbsoluteMaximumDurableJournalPayloadBytes);
         auto stored = intent.read();
         if (stored.status == DurableJournalStatus::not_found) {
+            if (expected.isEmpty())
+                throw std::runtime_error("The pending stop record is no longer present; no transfer was started");
             load();
             const auto current = journal.read();
             if (expected.size() != 32 || !current.ok() ||
@@ -882,7 +884,7 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
     }
     bool launch(std::optional<std::vector<core::DirectoryEntry>> sources, FileTransferKind kind,
                 std::filesystem::path destination, Progress progress, Conflict conflict,
-                Completion completion, QByteArray archive_record = {}) {
+                Completion completion, std::optional<QByteArray> archive_record = std::nullopt) {
         if (!progress || !conflict || !completion)
             return false;
         {
@@ -944,8 +946,8 @@ struct ObjectTransferQueue::State : std::enable_shared_from_this<State> {
                         }
                     };
                     try {
-                        if (!sources && (self->archive_pending() || !archive_record.isEmpty())) {
-                            result = self->archive_operation(archive_record);
+                        if (!sources && (self->archive_pending() || archive_record.has_value())) {
+                            result = self->archive_operation(archive_record.value_or(QByteArray{}));
                         } else if (sources) {
                             if (self->archive_pending())
                                 throw std::runtime_error("Finish archiving the previous transfer first");
@@ -1029,7 +1031,7 @@ bool ObjectTransferQueue::resume(Progress progress, Conflict conflict, Completio
                           std::move(conflict), std::move(completion));
 }
 bool ObjectTransferQueue::archive(QByteArray expected_payload_sha256, Completion completion) {
-    if (expected_payload_sha256.size() != 32) return false;
+    if (!expected_payload_sha256.isEmpty() && expected_payload_sha256.size() != 32) return false;
     return state_->launch(std::nullopt, FileTransferKind::copy, {},
         [](FileTransferProgressUpdate) {}, [](FileTransferConflict, bool, bool) {},
         std::move(completion), std::move(expected_payload_sha256));

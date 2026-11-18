@@ -78,9 +78,22 @@ CatalogController::CatalogController(QString search_helper_override, QObject *pa
     pollTimer_.setInterval(16);
     searchTimer_.setInterval(250);
     searchTimer_.setSingleShot(true);
+    refreshChoiceTimer_.setSingleShot(true);
+    connect(&refreshChoiceTimer_, &QTimer::timeout, this, [this] {
+        if (!std::exchange(manualRefreshPending_, false) || refresh_busy() ||
+            !views_.window->isVisible() || views_.window->isMinimized()) return;
+        static_cast<void>(commands_->refresh_or_recover());
+    });
     connect(&pollTimer_, &QTimer::timeout, this, [this] { poll(); });
     connect(&searchTimer_, &QTimer::timeout, this, [this] { start_search(); });
-    search_.set_reply_handler([this](search::SearchBatch batch) { handle_search_batch(std::move(batch)); });
+    search_.set_reply_handler([this](search::SearchBatch batch) {
+        // start() can reject a request inline, before returning its generation.
+        if (searchGeneration_ == 0) {
+            QTimer::singleShot(0, this, [this, batch = std::move(batch)]() mutable {
+                handle_search_batch(std::move(batch));
+            });
+        } else handle_search_batch(std::move(batch));
+    });
     monitor_.refresh_requested = [this] { return refresh_automatically(); };
 }
 CatalogController::~CatalogController() {
@@ -132,6 +145,7 @@ void CatalogController::attachViews(CatalogViews views, PreviewController &previ
     sync_preview_context();
 }
 void CatalogController::stop() {
+    cancel_refresh_choice();
     pollTimer_.stop();
     searchTimer_.stop();
     monitor_.stop();
@@ -158,6 +172,7 @@ bool CatalogController::eventFilter(QObject *watched, QEvent *event) {
     return QObject::eventFilter(watched, event);
 }
 void CatalogController::prepare_navigation() {
+    cancel_refresh_choice();
     leave_recursive(false);
     if (trash_active()) {
         if (callbacks_.leave_trash) callbacks_.leave_trash();
@@ -192,17 +207,40 @@ void CatalogController::leave_trash_for_recovery() {
     leave_trash();
     navigation_->open(path_, false);
 }
+bool CatalogController::refresh_busy() const {
+    return commands_->busy() || commands_->catalog_tools_busy() || commands_->input_preparation_pending() ||
+           QApplication::activeModalWidget() || QApplication::activePopupWidget() ||
+           (callbacks_.drag_active && callbacks_.drag_active());
+}
+void CatalogController::cancel_refresh_choice() {
+    refreshChoiceTimer_.stop();
+    manualRefreshPending_ = false;
+}
+void CatalogController::finish_manual_refresh() {
+    // Leave the terminal callback (including the Trash presenter's status update) before any modal loop.
+    if (manualRefreshPending_) refreshChoiceTimer_.start(0);
+}
 void CatalogController::refresh() {
+    if (refresh_busy()) return;
+    if (manualRefreshPending_ && !(trash_active() && !refreshChoiceTimer_.isActive() &&
+                                    trashRefreshRetry_.hasExpired())) return;
     if (trash_active()) {
-        const auto state = commands_->refresh_current_operation_journal_state();
-        if (state == CurrentOperationJournalState::none && !commands_->busy()) {
-            if (callbacks_.refresh_trash) callbacks_.refresh_trash();
-            return;
+        if (callbacks_.refresh_trash) {
+            // A blocked Trash read may never call replace_trash_entries. Allow an explicit
+            // retry after the normal inactivity budget, but never treat elapsed time as a result.
+            trashRefreshRetry_ = QDeadlineTimer(catalog::kCatalogInactivityTimeout);
+            manualRefreshPending_ = true;
+            callbacks_.refresh_trash();
         }
-        leave_trash_for_recovery();
+        return;
     }
-    if (commands_->refresh_or_recover()) { notify(); return; }
-    if (search_active()) { start_search(); return; }
+    if (search_active()) {
+        searchTimer_.stop();
+        start_search_request(true);
+        return;
+    }
+    if (path_.isEmpty()) return;
+    manualRefreshPending_ = true;
     preview_->catalogRefreshed();
     refresh_directory_sources();
     resume_polling(16);
@@ -211,7 +249,10 @@ void CatalogController::refresh() {
     notify();
 }
 void CatalogController::refresh_directory_sources() {
+    if (trash_active()) return;
     if (search_active()) { places_->refresh_current_directory(); return; }
+    // A same-location revalidation supersedes the scan, not the user's F5.
+    refreshChoiceTimer_.stop();
     automatic_ = false;
     if (recursive_active()) navigation_->remember_refresh_position();
     if (!recursive_active()) monitor_.scan_started();
@@ -240,7 +281,7 @@ void CatalogController::update_monitor_visibility() {
     monitor_.set_visible(views_.window->isVisible() && !views_.window->isMinimized() && ordinary_view());
 }
 bool CatalogController::refresh_automatically() {
-    if (automatic_refresh_blocked() || !source_.idle() ||
+    if (manualRefreshPending_ || automatic_refresh_blocked() || !source_.idle() ||
         update_.state == catalog::CatalogSessionState::loading ||
         update_.state == catalog::CatalogSessionState::waiting_retry) return false;
     automatic_ = true;
@@ -310,6 +351,7 @@ void CatalogController::poll() {
     sync_preview_context();
     preview_->catalogProgress(update_, previous, automatic, next.model_changed);
     if (!automatic || update_.state != catalog::CatalogSessionState::loading) notify();
+    bool terminal = false;
     switch (update_.state) {
     case catalog::CatalogSessionState::ready:
     case catalog::CatalogSessionState::network_disconnected:
@@ -320,11 +362,13 @@ void CatalogController::poll() {
         pollTimer_.stop();
         monitor_.scan_finished(update_.state == catalog::CatalogSessionState::ready);
         automatic_ = false;
+        terminal = true;
         break;
     case catalog::CatalogSessionState::waiting_retry: pollTimer_.setInterval(100); break;
     default: pollTimer_.setInterval(16); break;
     }
     selection_->update_clipboard_actions();
+    if (terminal && !automatic) finish_manual_refresh();
 }
 void CatalogController::apply_filter() {
     navigation_->cancel_restore();
@@ -364,6 +408,7 @@ void CatalogController::apply_thumbnail_extent(const int extent) {
 }
 
 void CatalogController::schedule_search() {
+    cancel_refresh_choice();
     views_.filter->setEnabled(!search_active() && views_.global_search->text().trimmed().isEmpty());
     if (search_active()) update_tools();
     if (views_.global_search->text().trimmed().isEmpty()) {
@@ -374,6 +419,10 @@ void CatalogController::schedule_search() {
     searchTimer_.start();
 }
 void CatalogController::start_search() {
+    start_search_request(false);
+}
+void CatalogController::start_search_request(const bool manual_refresh) {
+    cancel_refresh_choice();
     if (!views_.global_search->isEnabled()) { searchTimer_.stop(); return; }
     if (commands_->mutation_in_flight()) {
         if (!views_.global_search->text().trimmed().isEmpty()) searchTimer_.start();
@@ -383,6 +432,7 @@ void CatalogController::start_search() {
     const auto query = views_.global_search->text().trimmed();
     if (query.isEmpty()) { if (search_active()) leave_search(true); return; }
     if (recursive_active()) leave_recursive(true);
+    manualRefreshPending_ = manual_refresh;
     search_.cancel();
     searchGeneration_ = 0;
     query_ = query;
@@ -422,6 +472,7 @@ void CatalogController::start_search() {
         searchStatus_ = QCoreApplication::translate("MainWindow", "Global search · scope not configured");
         show_search_message(QCoreApplication::translate("MainWindow", "Set work folders in <b>VO-VE → Settings…</b>."));
         notify();
+        finish_manual_refresh();
         return;
     }
     searchGeneration_ = search_.start(query, searchRoots_);
@@ -448,6 +499,7 @@ void CatalogController::handle_search_batch(search::SearchBatch batch) {
         default: break;
         }
         notify();
+        finish_manual_refresh();
         return;
     }
     std::erase_if(batch.entries, [this](const auto &entry) { return removed_search_path(entry.path_utf8); });
@@ -470,6 +522,7 @@ void CatalogController::handle_search_batch(search::SearchBatch batch) {
     }
     preview_->schedule();
     notify();
+    if (batch.is_final) finish_manual_refresh();
 }
 bool CatalogController::removed_search_path(const std::string &path) const {
     if (removedPaths_.isEmpty()) return false;
@@ -530,6 +583,7 @@ void CatalogController::reconcile_search_move(const QStringList &paths) {
     if (searchCount_ == 0) show_search_message(QCoreApplication::translate("MainWindow", "Nothing found"));
 }
 void CatalogController::leave_search(const bool restore_catalog) {
+    cancel_refresh_choice();
     commands_->cancel_search_drop();
     searchTimer_.stop();
     search_.cancel();
@@ -598,6 +652,7 @@ void CatalogController::set_recursive(const bool enabled) {
     if (!enabled) { leave_recursive(true); return; }
     if (!ordinary_view() || path_.isEmpty() || update_.state != catalog::CatalogSessionState::ready ||
         !commands_->availability().create_directory_allowed()) { update_tools(); return; }
+    cancel_refresh_choice();
     navigation_->save();
     navigation_->cancel_restore();
     monitor_.set_visible(false);
@@ -624,6 +679,7 @@ void CatalogController::set_recursive(const bool enabled) {
 }
 void CatalogController::leave_recursive(const bool restore_catalog) {
     if (!recursive_active()) return;
+    cancel_refresh_choice();
     session_.suspend();
     pollTimer_.stop();
     mode_ = CatalogViewMode::directory;
@@ -658,8 +714,7 @@ void CatalogController::update_tools() {
     views_.recursive->setToolTip(eye);
     views_.recursive->setAccessibleName(eye);
     const bool recovery = commands_->recovery_pending();
-    const auto refresh = recovery ? QCoreApplication::translate("MainWindow", "Resume interrupted operation (F5)")
-        : QCoreApplication::translate("MainWindow", "Refresh folder and previews (F5)");
+    const auto refresh = QCoreApplication::translate("MainWindow", "Refresh folder and previews (F5)");
     views_.refresh->setToolTip(refresh);
     views_.refresh->setAccessibleName(refresh);
     if (search_active()) {
@@ -677,6 +732,7 @@ void CatalogController::update_tools() {
     }
 }
 void CatalogController::enter_trash() {
+    cancel_refresh_choice();
     navigation_->save();
     navigation_->cancel_restore();
     leave_recursive(false);
@@ -711,6 +767,7 @@ void CatalogController::enter_trash() {
 }
 void CatalogController::leave_trash() {
     if (!trash_active()) return;
+    cancel_refresh_choice();
     mode_ = CatalogViewMode::directory;
     views_.window->setProperty("trashViewActive", false);
     model_.set_tooltip_paths({});
@@ -736,7 +793,13 @@ void CatalogController::replace_trash_entries(std::vector<core::DirectoryEntry> 
     commands_->update_actions();
     notify();
 }
-void CatalogController::set_search_roots(QStringList roots) { searchRoots_ = std::move(roots); }
+void CatalogController::trash_refresh_finished() {
+    if (trash_active()) finish_manual_refresh();
+}
+void CatalogController::set_search_roots(QStringList roots) {
+    if (search_active() && roots != searchRoots_) cancel_refresh_choice();
+    searchRoots_ = std::move(roots);
+}
 void CatalogController::mark_saved_search_dirty() { savedSearchDirty_ = true; }
 bool CatalogController::search_query_current() const {
     return !search_active() || (views_.global_search && query_ == views_.global_search->text().trimmed());

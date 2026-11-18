@@ -1,4 +1,5 @@
 #include "file_command_workflow.hpp"
+#include "directory_transfer_settings.hpp"
 #include "drop_router.hpp"
 #include <QApplication>
 #include <QClipboard>
@@ -8,7 +9,7 @@ namespace vove::ui::file_command_detail {
 namespace {
 constexpr auto directoryTransferStateMagic = "VOVE-DIRECTORY-STATE-1\n";
 constexpr qsizetype directoryTransferStateDigestBytes = 32;
-constexpr qsizetype directoryTransferStateMaximumBytes = qsizetype{2} * 1'024 * 1'024;
+constexpr auto directoryTransferStateMaximumBytes = transfer_settings::maximum_bytes;
 }
 bool same_directory_path(const QString &left, const QString &right) {
 #ifdef Q_OS_WIN
@@ -284,15 +285,22 @@ namespace vove::ui {
 using namespace file_command_detail;
 
 namespace {
-constexpr auto directoryTransferStateKey = "operations/directoryTransferStateV1";
 QByteArray read_recovery_settings() {
     QSettings settings;
-    return settings.value(QString::fromLatin1(directoryTransferStateKey)).toByteArray();
+    settings.setFallbacksEnabled(false);
+    return settings.value(transfer_settings::active_key).toByteArray();
 }
-bool write_recovery_settings(const QByteArray &state) {
+bool write_recovery_settings(const QByteArray &state, const QByteArray *expected = nullptr) {
     QSettings settings;
-    if (state.isEmpty()) settings.remove(QString::fromLatin1(directoryTransferStateKey));
-    else settings.setValue(QString::fromLatin1(directoryTransferStateKey), state);
+    const auto lock = transfer_settings::lock_profile(transfer_settings::profile_path(settings));
+    if (!lock.owns_lock()) return false;
+    if (expected) {
+        settings.setFallbacksEnabled(false);
+        if (transfer_settings::inspect(settings, *expected) != transfer_settings::Active::matches)
+            return false;
+    }
+    if (state.isEmpty()) settings.remove(transfer_settings::active_key);
+    else settings.setValue(transfer_settings::active_key, state);
     settings.remove(QStringLiteral("operations/directoryTransferRecoveryRequestId"));
     settings.remove(QStringLiteral("operations/directoryTransferRecoverySource"));
     settings.remove(QStringLiteral("operations/directoryTransferRecoveryDestination"));
@@ -364,8 +372,27 @@ FileCommandController::Impl::Impl(FileCommandPorts ports, FileCommandOptions opt
     if (!ports_.entry_names) ports_.entry_names = [](const QString &) { return std::vector<std::filesystem::path>{}; };
     if (!ports_.trash_operation_items) ports_.trash_operation_items = [](const auto &) { return std::size_t{1}; };
     if (!ports_.readers_idle) ports_.readers_idle = [] { return true; };
+    const bool default_recovery_store = !ports_.read_recovery && !ports_.write_recovery;
+    if (!ports_.select_recovery && default_recovery_store) {
+        ports_.select_recovery = [](const QByteArray &expected, const QByteArray &replacement) {
+            return !replacement.isEmpty() && write_recovery_settings(replacement, &expected);
+        };
+    }
+    if (!ports_.archive_recovery) {
+        if (default_recovery_store) {
+            ports_.archive_recovery = [](const QByteArray &expected) {
+                QSettings settings;
+                return transfer_settings::archive(settings, expected);
+            };
+        } else {
+            // An injected store must never retire the real user's recovery state.
+            ports_.archive_recovery = [](const QByteArray &) { return false; };
+        }
+    }
     if (!ports_.read_recovery) ports_.read_recovery = read_recovery_settings;
-    if (!ports_.write_recovery) ports_.write_recovery = write_recovery_settings;
+    if (!ports_.write_recovery) ports_.write_recovery = [](const QByteArray &bytes) {
+        return write_recovery_settings(bytes);
+    };
     transferProbeTimer_ = new QTimer(this);
     transferProbeTimer_->setInterval(16);
     connect(transferProbeTimer_, &QTimer::timeout, this, &Impl::poll_transfer_preparation);
@@ -555,88 +582,12 @@ void FileCommandController::Impl::update_rename_action() {
     FileCommandActionState state{present_file_selection(summary, availability.trash_view,
         availability.selection_mutation_allowed()), availability};
     state.trash_enabled = availability.trash_catalog_allowed();
-    state.unfinished_enabled = availability.unfinished_operation_allowed();
     state.create_directory_enabled = availability.create_directory_allowed();
     ports_.actions_changed(state);
 }
 
 bool FileCommandController::Impl::refresh_or_recover() {
-if (renameInFlight_ || deleteInFlight_ || transferInFlight_ || createDirectoryInFlight_ ||
-        batchRenameCoordinator_.busy() || fileTransferCoordinator_.busy() ||
-        directoryTransferService_.busy() || permanentDeleteCoordinator_.busy() ||
-        trashCoordinator_.busy() || objectTransferQueue_.busy()) {
-        operationStatus_ =
-            QCoreApplication::translate("MainWindow", "Waiting for the file operation result…");
-        publish_status();
-        return true;
-    }
-    const auto journal_state = refresh_current_operation_journal_state();
-    if (journal_state == CurrentOperationJournalState::blocked) {
-        publish_status();
-        return true;
-    }
-    if (journal_state == CurrentOperationJournalState::directory_transfer_recovery) {
-        offer_directory_transfer_discard();
-        return true;
-    }
-    if (trashCoordinator_.owns_recovery()) {
-        operationStatus_ =
-            QCoreApplication::translate("MainWindow", "Recovering VO-VE Trash operation…");
-        publish_status();
-        if (!submit_trash_recovery()) {
-            operationStatus_ =
-                QCoreApplication::translate("MainWindow", "Failed to start VO-VE Trash recovery");
-            publish_status();
-        }
-        return true;
-    }
-    if (journal_state == CurrentOperationJournalState::transfer_recovery &&
-        !fileTransferCoordinator_.owns_recovery()) {
-        show_unfinished_operation_dialog();
-        return true;
-    }
-    if (fileTransferCoordinator_.owns_recovery()) {
-        operationStatus_ = QCoreApplication::translate("MainWindow", "Recovering copy or move…");
-        publish_status();
-        if (!submit_file_transfer_recovery()) {
-            operationStatus_ =
-                QCoreApplication::translate("MainWindow", "Failed to start transfer recovery");
-            publish_status();
-        }
-        return true;
-    }
-    if (permanentDeleteCoordinator_.owns_recovery()) {
-        operationStatus_ = QCoreApplication::translate("MainWindow", "Recovering safe deletion…");
-        publish_status();
-        if (!submit_delete_recovery()) {
-            operationStatus_ =
-                QCoreApplication::translate("MainWindow", "Failed to start deletion recovery");
-            publish_status();
-        }
-        return true;
-    }
-    if (batchRenameCoordinator_.owns_recovery()) {
-        operationStatus_ = QCoreApplication::translate("MainWindow", "Recovering batch rename…");
-        publish_status();
-        if (!submit_batch_rename_recovery()) {
-            operationStatus_ =
-                QCoreApplication::translate("MainWindow", "Failed to start name recovery");
-            publish_status();
-        }
-        return true;
-    }
-    if (pendingRenameOperation_) {
-        operationStatus_ = QCoreApplication::translate("MainWindow", "Checking rename result…");
-        publish_status();
-        if (!submit_pending_rename_reconciliation()) {
-            operationStatus_ =
-                QCoreApplication::translate("MainWindow", "Failed to start result verification");
-            publish_status();
-        }
-        return true;
-    }
-
-    return false;
+    return show_unfinished_operation_dialog();
 }
 
 void FileCommandController::Impl::load_recovery_state() {

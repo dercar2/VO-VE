@@ -1421,6 +1421,14 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
     add_test(NAME vove-navigation-tests COMMAND vove-qt-shell-tests)
     add_test(NAME vove-mixed-transfer-ui-tests COMMAND vove-qt-shell-tests)
     add_test(NAME vove-object-recovery-ui-tests COMMAND vove-qt-shell-tests)
+    if(WIN32)
+        add_test(NAME vove-windows-f5-recovery-ui-tests COMMAND vove-qt-shell-tests)
+        set_tests_properties(vove-windows-f5-recovery-ui-tests PROPERTIES LABELS "ui-focused"
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_F5_RECOVERY_ONLY=1" TIMEOUT 180)
+        add_test(NAME vove-directory-archive-ui-tests COMMAND vove-qt-shell-tests)
+        set_tests_properties(vove-directory-archive-ui-tests PROPERTIES LABELS "ui-focused"
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_DIRECTORY_ARCHIVE_ONLY=1" TIMEOUT 75)
+    endif()
     set_tests_properties(vove-object-recovery-ui-tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;VOVE_OBJECT_RECOVERY_ONLY=1" TIMEOUT 45)
     if(WIN32)

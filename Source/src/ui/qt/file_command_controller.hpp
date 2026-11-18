@@ -61,7 +61,6 @@ struct FileSelectionActionState {
 struct FileCommandActionState : FileSelectionActionState {
     OperationAvailability availability;
     bool trash_enabled{};
-    bool unfinished_enabled{};
     bool create_directory_enabled{};
 };
 
@@ -92,7 +91,6 @@ struct FileCommandPorts {
     std::function<void()> clear_selection;
     std::function<void()> refresh_directory_sources;
     // Retry uses the same mode-transition boundary as the user's F5 command.
-    std::function<void()> refresh_catalog;
     std::function<void()> prepare_recovery_catalog;
     // -1 preserves the current poll interval.
     std::function<void(int interval_ms)> poll_catalog;
@@ -115,6 +113,9 @@ struct FileCommandPorts {
     // the completed checkpoint is persisted before the backend may retire its manifest.
     std::function<QByteArray()> read_recovery;
     std::function<bool(const QByteArray &)> write_recovery;
+    std::function<bool(const QByteArray &expected, const QByteArray &replacement)> select_recovery;
+    // Verify a durable, exact-byte archive before conditionally retiring only the active key.
+    std::function<bool(const QByteArray &expected)> archive_recovery;
 };
 
 struct FileCommandOptions {

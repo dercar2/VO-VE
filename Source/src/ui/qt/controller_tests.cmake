@@ -38,6 +38,11 @@ add_executable(vove-window-settings-tests
 target_link_libraries(vove-window-settings-tests PRIVATE vove::search Qt6::Core)
 vove_register_focused_controller_test(vove-window-settings-tests)
 
+add_executable(vove-directory-transfer-settings-tests
+    "${PROJECT_SOURCE_DIR}/tests/ui/directory_transfer_settings_test.cpp")
+target_link_libraries(vove-directory-transfer-settings-tests PRIVATE vove::fileops Qt6::Core)
+vove_register_focused_controller_test(vove-directory-transfer-settings-tests)
+
 # Passive shell/widget closure, derived from window_shell.cpp and the worker's checker.
 # No models, MainWindow, preview processes or file-command workflows are linked here.
 set(vove_window_shell_test_sources

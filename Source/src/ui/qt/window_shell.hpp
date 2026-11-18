@@ -100,7 +100,6 @@ struct ViewerWidgets {
     QAction *pasteObjectsAction{};
     QAction *trashAction{};
     QAction *settingsAction{};
-    QAction *unfinishedOperationAction{};
     QAction *updateAction{};
     QAction *aboutAction{};
     QAction *componentsAction{};

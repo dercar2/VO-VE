@@ -2290,6 +2290,34 @@ Actions apply to the complete deletion operation</source>
         <translation>Удалить незавершённое</translation>
     </message>
     <message>
+        <source>. Press F5 to choose an action</source>
+        <translation>. Нажмите F5, чтобы выбрать действие.</translation>
+    </message>
+    <message>
+        <source>No recovery data found. Local queue closed.</source>
+        <translation>Данные восстановления не найдены. Локальная очередь закрыта.</translation>
+    </message>
+    <message>
+        <source>Choose what to do with this unfinished folder transfer.</source>
+        <translation>Выберите действие для незавершённой передачи папок.</translation>
+    </message>
+    <message>
+        <source>Archive local operation without continuing</source>
+        <translation>Архивировать локальную операцию без продолжения</translation>
+    </message>
+    <message>
+        <source>Save the local recovery record and unlock file commands? No files will be moved or deleted. Hidden transfer data will stay in place.</source>
+        <translation>Сохранить локальную запись восстановления и разблокировать файловые команды? Файлы не будут перемещены или удалены. Скрытые данные передачи останутся на месте.</translation>
+    </message>
+    <message>
+        <source>Could not archive the local recovery record. Check the unfinished operation.</source>
+        <translation>Не удалось архивировать запись. Проверьте незавершённую операцию.</translation>
+    </message>
+    <message>
+        <source>Local operation archived. Transfer outcome is unknown; no files were changed.</source>
+        <translation>Локальная операция архивирована. Результат передачи неизвестен. При архивировании файлы не изменялись.</translation>
+    </message>
+    <message>
         <location filename="../src/ui/qt/main_window.cpp" line="6265"/>
         <source>Failed to save the selected action</source>
         <translation>Не удалось сохранить выбранное действие</translation>
@@ -3452,6 +3480,20 @@ Stage: %2</source>
 </context>
 <context>
     <name>TrashRecoveryDialog</name>
+    <message><source>Retry</source><translation>Повторить</translation></message>
+    <message><source>Close</source><translation>Закрыть</translation></message>
+    <message><source>Finish stopping</source><translation>Завершить прекращение</translation></message>
+    <message><source>Stop and leave files as they are…</source><translation>Прекратить и оставить файлы как есть…</translation></message>
+    <message><source>Retry will check whether unfinished data can be safely removed.</source><translation>При повторе VO-VE проверит, можно ли безопасно удалить незавершённые данные.</translation></message>
+    <message><source>Record location after stopping: %1</source><translation>Путь к записи после прекращения: %1</translation></message>
+    <message><source>Stop processing the remaining queue? Original files, destinations and hidden partial copies will stay where they are. You do not need to do anything else to use VO-VE.</source><translation>Прекратить обработку оставшейся очереди? Исходные файлы, назначения и скрытые частичные копии останутся на месте. Для дальнейшей работы в VO-VE ничего делать не нужно.</translation></message>
+    <message><source>Operation stopped. Files were left as they are; the previous result is unknown. No action is needed.</source><translation>Операция прекращена. Файлы оставлены как есть, прежний результат неизвестен. Ничего делать не нужно.</translation></message>
+    <message><source>Operation stopped. Files were left as they are; the previous result is unknown. Record: %1</source><translation>Операция прекращена. Файлы оставлены как есть, прежний результат неизвестен. Запись: %1</translation></message>
+    <message><source>Stopping leaves original files, destinations and hidden partial copies in place. The outcome remains unknown. You do not need to do anything else to use VO-VE.</source><translation>Исходные файлы, назначения и скрытые частичные копии останутся на месте. Результат неизвестен. Для дальнейшей работы в VO-VE ничего делать не нужно.</translation></message>
+    <message><source>The record cannot be safely read. No action was taken. Copy its location for support.</source><translation>Запись нельзя безопасно прочитать. Действия не выполнялись. Скопируйте её расположение для диагностики.</translation></message>
+    <message><source>Copy records folder path</source><translation>Скопировать путь к папке записей</translation></message>
+    <message><source>Path copied</source><translation>Путь скопирован</translation></message>
+    <message><source>Transfer paused: %1. Press F5 to choose an action.</source><translation>Передача приостановлена: %1. Нажмите F5, чтобы выбрать действие.</translation></message>
     <message><source>Unfinished operation…</source><translation>Незавершённая операция…</translation></message>
     <message><source>Trash permissions differ from the recorded state</source><translation>Права доступа Корзины отличаются от сохранённых</translation></message>
     <message><source>Trash records do not match; recovery is required</source><translation>Записи Корзины не совпадают; требуется восстановление</translation></message>

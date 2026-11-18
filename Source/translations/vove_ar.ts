@@ -2296,6 +2296,34 @@ Actions apply to the complete deletion operation</source>
         <translation>حذف البيانات غير المكتملة</translation>
     </message>
     <message>
+        <source>. Press F5 to choose an action</source>
+        <translation>. اضغط F5 لاختيار إجراء.</translation>
+    </message>
+    <message>
+        <source>No recovery data found. Local queue closed.</source>
+        <translation>لم يتم العثور على بيانات الاسترداد. أُغلِق الطابور المحلي.</translation>
+    </message>
+    <message>
+        <source>Choose what to do with this unfinished folder transfer.</source>
+        <translation>اختر إجراءً لنقل المجلدات غير المكتمل.</translation>
+    </message>
+    <message>
+        <source>Archive local operation without continuing</source>
+        <translation>أرشفة العملية المحلية دون متابعتها</translation>
+    </message>
+    <message>
+        <source>Save the local recovery record and unlock file commands? No files will be moved or deleted. Hidden transfer data will stay in place.</source>
+        <translation>هل تريد حفظ سجل الاسترداد المحلي وإتاحة أوامر الملفات؟ لن تُنقل أي ملفات أو تُحذف، وستبقى بيانات النقل المخفية في مكانها.</translation>
+    </message>
+    <message>
+        <source>Could not archive the local recovery record. Check the unfinished operation.</source>
+        <translation>تعذرت أرشفة سجل الاسترداد المحلي. تحقق من العملية غير المكتملة.</translation>
+    </message>
+    <message>
+        <source>Local operation archived. Transfer outcome is unknown; no files were changed.</source>
+        <translation>أُرشفت العملية المحلية. نتيجة النقل غير معروفة، ولم تُغيّر الأرشفة أي ملفات.</translation>
+    </message>
+    <message>
         <location filename="../src/ui/qt/main_window.cpp" line="6265"/>
         <source>Failed to save the selected action</source>
         <translation>تعذّر حفظ الإجراء المحدد</translation>
@@ -3461,6 +3489,20 @@ Stage: %2</source>
 </context>
 <context>
     <name>TrashRecoveryDialog</name>
+    <message><source>Retry</source><translation>إعادة المحاولة</translation></message>
+    <message><source>Close</source><translation>إغلاق</translation></message>
+    <message><source>Finish stopping</source><translation>إتمام الإيقاف</translation></message>
+    <message><source>Stop and leave files as they are…</source><translation>إيقاف العملية وترك الملفات كما هي…</translation></message>
+    <message><source>Retry will check whether unfinished data can be safely removed.</source><translation>ستتحقق إعادة المحاولة مما إذا كان يمكن حذف البيانات غير المكتملة بأمان.</translation></message>
+    <message><source>Record location after stopping: %1</source><translation>موقع السجل بعد الإيقاف: %1</translation></message>
+    <message><source>Stop processing the remaining queue? Original files, destinations and hidden partial copies will stay where they are. You do not need to do anything else to use VO-VE.</source><translation>هل تريد إيقاف معالجة بقية قائمة الانتظار؟ ستبقى الملفات الأصلية والوجهات والنسخ الجزئية المخفية في أماكنها. لا يلزم أي إجراء آخر لاستخدام VO-VE.</translation></message>
+    <message><source>Operation stopped. Files were left as they are; the previous result is unknown. No action is needed.</source><translation>توقفت العملية. بقيت الملفات كما هي والنتيجة السابقة غير معروفة. لا يلزم أي إجراء.</translation></message>
+    <message><source>Operation stopped. Files were left as they are; the previous result is unknown. Record: %1</source><translation>توقفت العملية. بقيت الملفات كما هي والنتيجة السابقة غير معروفة. السجل: %1</translation></message>
+    <message><source>Stopping leaves original files, destinations and hidden partial copies in place. The outcome remains unknown. You do not need to do anything else to use VO-VE.</source><translation>ستبقى الملفات الأصلية والوجهات والنسخ الجزئية المخفية في أماكنها. النتيجة غير معروفة. لا يلزم أي إجراء آخر لاستخدام VO-VE.</translation></message>
+    <message><source>The record cannot be safely read. No action was taken. Copy its location for support.</source><translation>تعذرت قراءة السجل بأمان. لم يُتخذ أي إجراء. انسخ موقعه لإرساله إلى الدعم.</translation></message>
+    <message><source>Copy records folder path</source><translation>نسخ مسار مجلد السجلات</translation></message>
+    <message><source>Path copied</source><translation>نُسخ المسار</translation></message>
+    <message><source>Transfer paused: %1. Press F5 to choose an action.</source><translation>توقف النقل مؤقتًا: %1. اضغط F5 لاختيار إجراء.</translation></message>
     <message><source>Unfinished operation…</source><translation>عملية غير مكتملة…</translation></message>
     <message><source>Trash permissions differ from the recorded state</source><translation>أذونات سلة المحذوفات تختلف عن الحالة المسجلة</translation></message>
     <message><source>Trash records do not match; recovery is required</source><translation>سجلات سلة المحذوفات غير متطابقة؛ يلزم الاسترداد</translation></message>

@@ -8,6 +8,7 @@
 #include "vove/catalog/catalog_session.hpp"
 #include "vove/platform/directory_service.hpp"
 
+#include <QDeadlineTimer>
 #include <QObject>
 #include <QSet>
 #include <QTimer>
@@ -84,6 +85,7 @@ class CatalogController final : public QObject {
     void update_tools();
     void enter_trash();
     void leave_trash();
+    void trash_refresh_finished();
     void replace_trash_entries(std::vector<core::DirectoryEntry> entries,
                                QHash<qulonglong, QString> tooltip_paths);
     void set_search_roots(QStringList roots);
@@ -121,6 +123,10 @@ class CatalogController final : public QObject {
     [[nodiscard]] SavedView take_view();
     void restore_view(SavedView saved);
     void handle_search_batch(search::SearchBatch batch);
+    void start_search_request(bool manual_refresh);
+    void cancel_refresh_choice();
+    void finish_manual_refresh();
+    [[nodiscard]] bool refresh_busy() const;
     [[nodiscard]] bool removed_search_path(const std::string &path) const;
     void show_search_message(const QString &message);
     void update_search_message_geometry();
@@ -136,6 +142,8 @@ class CatalogController final : public QObject {
     DirectoryMonitor monitor_;
     QTimer pollTimer_;
     QTimer searchTimer_;
+    QTimer refreshChoiceTimer_;
+    QDeadlineTimer trashRefreshRetry_;
     CatalogViews views_;
     CatalogCallbacks callbacks_;
     PreviewController *preview_{};
@@ -160,5 +168,6 @@ class CatalogController final : public QObject {
     bool searchTruncated_{};
     bool savedSearchDirty_{};
     bool automatic_{};
+    bool manualRefreshPending_{};
 };
 } // namespace vove::ui

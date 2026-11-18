@@ -27,6 +27,7 @@
 #include <QLineEdit>
 #include <QLocale>
 #include <QMessageBox>
+#include <QScopedValueRollback>
 #include <QPointer>
 #include <QPushButton>
 #include <QStandardPaths>
@@ -150,7 +151,7 @@ class FileCommandController::Impl final : public QObject {
         const QString &destination, const fileops::FileTransferKind kind);
     bool start_object_transfer(const QList<core::DirectoryEntry> &entries,
         const QString &destination, const fileops::FileTransferKind kind,
-        const bool resume = false, const QByteArray &archive_record = {});
+        const bool resume = false, const std::optional<QByteArray> &archive_record = std::nullopt);
     bool start_file_transfer(const QList<core::DirectoryEntry> &entries,
         const QString &destination_directory,
         const fileops::FileTransferKind kind);
@@ -173,7 +174,7 @@ class FileCommandController::Impl final : public QObject {
         const fileops::BasicDirectoryTransferProgress &progress);
     bool record_directory_transfer_completion();
     void handle_directory_transfer_result(
-        const fileops::BasicDirectoryTransferResult &result);
+        const fileops::BasicDirectoryTransferResult &result, bool recovering = false);
     void poll_transfer_preparation();
     void poll_create_directory_preparation();
     bool begin_external_directory_drop(const ExternalDirectoryDropIntent intent,
@@ -237,7 +238,8 @@ class FileCommandController::Impl final : public QObject {
     QByteArray encode_directory_transfer_recovery_state(const bool completion_known) const;
     bool persist_directory_transfer_recovery_state();
     void clear_directory_transfer_recovery_state();
-    void show_unfinished_operation_dialog();
+    void forget_directory_transfer_recovery_state();
+    bool show_unfinished_operation_dialog();
     void set_rename_in_flight(const bool in_flight);
     void set_delete_in_flight(const bool in_flight);
     void set_transfer_in_flight(const bool in_flight);
@@ -321,6 +323,8 @@ class FileCommandController::Impl final : public QObject {
     std::uint64_t directoryTransferRecoveryRequestId_{};
     bool directoryTransferCompletionKnown_{};
     bool directoryTransferDiscarding_{};
+    bool recoveryDialogOpen_{};
+    QByteArray directoryTransferArchiveExpected_;
     bool directoryTransferStateCorrupt_{};
     bool renameInFlight_{};
     bool deleteInFlight_{};

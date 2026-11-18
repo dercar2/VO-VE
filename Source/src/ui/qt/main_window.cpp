@@ -144,7 +144,6 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
     ports.file_in_use = [this] { status_->notifyFileInUse(); };
     ports.clear_selection = [this] { preview_->clearSelection(); };
     ports.refresh_directory_sources = [this] { catalog_->refresh_directory_sources(); };
-    ports.refresh_catalog = [this] { catalog_->refresh(); };
     ports.prepare_recovery_catalog = [this] { catalog_->leave_trash_for_recovery(); };
     ports.poll_catalog = [this](int interval) { catalog_->resume_polling(interval); };
     ports.reveal_paths = [this](const QStringList &paths) { navigation_->reveal_after_refresh(paths); };
@@ -281,7 +280,6 @@ void MainWindow::connect_commands() {
     connect(w.renameAction, &QAction::triggered, this, [this] { commands_->prompt_rename_selected(); });
     connect(w.deleteAction, &QAction::triggered, this, [this] { commands_->prompt_delete_selected(); });
     connect(w.trashAction, &QAction::triggered, this, [this] { trash_->show(); });
-    connect(w.unfinishedOperationAction, &QAction::triggered, this, [this] { commands_->show_unfinished_operation_dialog(); });
     connect(w.settingsAction, &QAction::triggered, this, [this] { show_settings_dialog(); });
     connect(w.updateAction, &QAction::triggered, this, [this] { show_update_dialog(); });
     connect(w.componentsAction, &QAction::triggered, this, [this] { show_components_dialog(); });
@@ -344,7 +342,6 @@ void MainWindow::apply_command_actions(const FileCommandActionState &state) {
     apply_selection_presentation(state);
     const auto &w = shell_->widgets();
     w.trashAction->setEnabled(state.trash_enabled);
-    w.unfinishedOperationAction->setEnabled(state.unfinished_enabled);
     w.createFolderAction->setEnabled(state.create_directory_enabled);
     w.createFolderButton->setEnabled(state.create_directory_enabled);
     if (catalog_) catalog_->update_tools();

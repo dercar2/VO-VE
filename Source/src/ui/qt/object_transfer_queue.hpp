@@ -43,6 +43,7 @@ class ObjectTransferQueue final {
     bool resume(Progress progress, Conflict conflict, Completion completion);
     // Explicitly abandons further execution, not the payload. Bind confirmation to the
     // displayed typed journal payload; the archive intent survives interrupted retirement.
+    // An empty digest only permits finishing an existing archive intent, never resuming a transfer.
     bool archive(QByteArray expected_payload_sha256, Completion completion);
     bool archive_pending() const;
 #ifdef VOVE_UI_TEST_HOOKS

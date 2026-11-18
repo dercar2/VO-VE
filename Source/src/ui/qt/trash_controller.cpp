@@ -73,7 +73,9 @@ void TrashController::load(const bool discover) {
     const auto roots = discover ? std::nullopt
         : std::optional<std::vector<std::filesystem::path>>{std::vector<std::filesystem::path>{}};
     if (!loader_.start(commands_.trash_manifest_directory(), roots)) {
+        timer_.stop();
         message(QCoreApplication::translate("MainWindow", "Failed to read VO-VE Trash"));
+        catalog_.trash_refresh_finished();
         return;
     }
     if (catalog_.trash_active() &&
@@ -82,11 +84,14 @@ void TrashController::load(const bool discover) {
     timer_.start();
 }
 void TrashController::poll() {
-    if (auto result = loader_.poll()) {
-        if (catalog_.trash_active()) apply(std::move(*result));
-        else { result_ = std::move(*result); update_favorite(); }
-    }
-    if (!loader_.loading()) timer_.stop();
+    auto result = loader_.poll();
+    // The worker can finish immediately after an empty poll. Stop only on delivery.
+    if (!result) return;
+    timer_.stop();
+    if (catalog_.trash_active()) {
+        apply(std::move(*result));
+        catalog_.trash_refresh_finished();
+    } else { result_ = std::move(*result); update_favorite(); }
 }
 void TrashController::apply(fileops::TrashCatalogResult result) {
     result_ = std::move(result);
@@ -161,7 +166,7 @@ void TrashController::cleanup() {
     if (!result_ || !result_->ok()) {
         pendingCleanup_ = true;
         if (!catalog_.trash_active()) show();
-        else if (!loader_.loading()) load();
+        else if (!timer_.isActive()) load();
         return;
     }
     if (!can_cleanup()) return;
