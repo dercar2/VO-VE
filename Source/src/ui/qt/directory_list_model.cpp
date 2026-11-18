@@ -1,6 +1,7 @@
 #include "directory_list_model.hpp"
 #include "worker_startup_text.hpp"
 
+#include "vove/core/catalog_visibility.hpp"
 #include "vove/preview/helper_protocol.hpp"
 
 #include <QDateTime>
@@ -14,6 +15,7 @@
 #include <QtGlobal>
 
 #include <algorithm>
+#include <ranges>
 
 namespace vove::ui {
 namespace {
@@ -313,7 +315,11 @@ void DirectoryListModel::replace_catalog(std::vector<core::DirectoryEntry> entri
                left.size_bytes == right.size_bytes &&
                left.modified_unix_ns == right.modified_unix_ns;
     };
-    lastReplacementChanged_ = !std::ranges::equal(model_.entries(), entries, same_entry);
+    const auto &current = model_.entries();
+    lastReplacementChanged_ = current.size() == entries.size()
+        ? !std::ranges::equal(current, entries, same_entry)
+        : !std::ranges::equal(current, entries | std::views::filter(core::visible_in_preview_catalog),
+                              same_entry);
     if (!lastReplacementChanged_) {
         return;
     }
@@ -359,16 +365,22 @@ void DirectoryListModel::replace_catalog(std::vector<core::DirectoryEntry> entri
 }
 
 void DirectoryListModel::set_filter(const QString &text) {
+    auto key = core::make_search_key(text.toUtf8().toStdString());
+    if (model_.filter_case() == core::FilterCase::insensitive && model_.filter_key() == key) {
+        return;
+    }
     beginResetModel();
-    const auto utf8 = text.toUtf8().toStdString();
     model_.set_filter_case(core::FilterCase::insensitive);
-    model_.set_filter_key(core::make_search_key(utf8));
+    model_.set_filter_key(std::move(key));
     rebuild_row_index();
     endResetModel();
 }
 
 void DirectoryListModel::set_sort(const core::SortField field,
                                   const core::SortDirection direction) {
+    if (model_.sort_field() == field && model_.sort_direction() == direction) {
+        return;
+    }
     beginResetModel();
     model_.set_sort(field, direction);
     rebuild_row_index();
@@ -617,6 +629,9 @@ int DirectoryListModel::row_for_id(const qulonglong id) const noexcept {
 }
 
 void DirectoryListModel::rebuild_row_index() {
+#ifdef VOVE_TEST_ROW_INDEX_REBUILDS
+    setProperty("testRowIndexRebuilds", property("testRowIndexRebuilds").toInt() + 1);
+#endif
     rowsById_.clear();
     rowsById_.reserve(static_cast<qsizetype>(model_.visible_size()));
     for (std::size_t row = 0; row < model_.visible_size(); ++row) {

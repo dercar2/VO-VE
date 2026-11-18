@@ -1,5 +1,9 @@
 #include "vove/fileops/current_operation_journal.hpp"
 
+#ifdef VOVE_CURRENT_JOURNAL_READ_TEST_HOOK
+#include "current_journal_read_test_hook.hpp"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -74,6 +78,9 @@ CurrentOperationJournalStore::write(const CurrentOperationKind kind,
 }
 
 CurrentOperationJournalReadResult CurrentOperationJournalStore::read() const {
+#ifdef VOVE_CURRENT_JOURNAL_READ_TEST_HOOK
+    ++test::current_thread_journal_reads;
+#endif
     auto stored = durable_.read();
     CurrentOperationJournalReadResult result;
     result.status = stored.status;

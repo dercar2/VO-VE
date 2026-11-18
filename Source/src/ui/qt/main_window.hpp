@@ -25,6 +25,7 @@ class StatusPresenter;
 class TrashController;
 class WindowShell;
 struct FileCommandActionState;
+struct FileSelectionActionState;
 struct ViewerStyle;
 
 class MainWindow final : public QMainWindow {
@@ -54,6 +55,8 @@ class MainWindow final : public QMainWindow {
     void publish_catalog_status();
     void publish_operation_activity();
     void apply_command_actions(const FileCommandActionState &state);
+    void refresh_selection_presentation();
+    void apply_selection_presentation(const FileSelectionActionState &state);
     void schedule_settings_save();
     [[nodiscard]] WindowSettingsSnapshot capture_settings() const;
     void restore_settings();
@@ -78,6 +81,9 @@ class MainWindow final : public QMainWindow {
     std::unique_ptr<DropRouter> drops_;
     bool restoringSettings_{};
     bool shuttingDown_{};
+    // Last displayed flags only. Command handlers always validate against FileCommands.
+    bool presentedTrashView_{};
+    bool presentedSelectionMutationEnabled_{};
 };
 
 } // namespace vove::ui

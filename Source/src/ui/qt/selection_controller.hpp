@@ -5,6 +5,7 @@
 #include "external_open_coordinator.hpp"
 #include "operation_availability.hpp"
 #include "selection_command.hpp"
+#include "selection_action_summary.hpp"
 #include "vove/fileops/file_transfer_coordinator.hpp"
 
 #include <QObject>
@@ -45,6 +46,7 @@ struct SelectionCallbacks {
     std::function<bool()> native_open_allowed{};
     std::function<void()> external_applications_changed{};
     std::function<void(QPoint)> trash_menu_requested{};
+    // Repaints selection-dependent actions only, without querying command availability.
     std::function<void()> refresh_command_actions{};
     std::function<void(QString)> selection_summary_changed{};
 };
@@ -78,21 +80,31 @@ class SelectionController final : public QObject {
     [[nodiscard]] SelectionSnapshot selection_snapshot() const;
     [[nodiscard]] bool invoke_selection_command(const SelectionCommand &command) const;
     [[nodiscard]] QString selection_status_text() const;
+    [[nodiscard]] SelectionActionSummary action_summary() const;
     [[nodiscard]] std::unique_ptr<QMimeData> file_mime_data() const;
     void copy_selected_names();
     void copy_selected_paths();
     void copy_selected_objects();
     void update_clipboard_actions();
+    void apply_clipboard_actions(const SelectionActionSummary &summary, bool trash_view);
+    void update_paste_action();
     [[nodiscard]] std::unique_ptr<QMenu> create_context_menu(const QPoint &position);
     void show_catalog_context_menu(const QPoint &position);
 
   private:
     [[nodiscard]] static QString tr(const char *text);
     [[nodiscard]] OperationAvailability availability() const;
+    [[nodiscard]] QString selection_status_text(const SelectionActionSummary &summary) const;
+    void refresh_selection_actions();
+    void read_clipboard_hint();
     QPointer<QListView> view_;
     DirectoryListModel &model_;
     SelectionActions actions_;
     SelectionCallbacks callbacks_;
+    mutable QItemSelection summaryRanges_;
+    mutable SelectionActionSummary cachedSummary_;
+    bool clipboardHasUrls_{};
+    bool presentedTrashView_{};
     ExternalApplicationRegistry externalApplications_;
     ExternalOpenCoordinator externalOpenCoordinator_;
 };

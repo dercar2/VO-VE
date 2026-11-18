@@ -187,10 +187,10 @@ std::int64_t unix_ns(const FILETIME time) noexcept {
 }
 
 vove::core::DirectoryEntry make_entry(const DWORD index, const std::uint64_t id,
-                                      const std::span<const std::string> roots) {
+                                      const vove::search::AllowedRootFilter &filter) {
     const auto path_wide = result_path(index);
     const auto encoded_path = utf8_from_wide(path_wide);
-    if (encoded_path.empty() || !vove::search::path_is_within_allowed_roots(encoded_path, roots)) {
+    if (encoded_path.empty() || !filter.contains(encoded_path)) {
         return {};
     }
 
@@ -245,7 +245,8 @@ int fail(const std::uint64_t generation, const SearchStatus status, std::string 
 }
 
 int run(const SearchRequest &request) {
-    const auto roots = vove::search::normalize_allowed_roots(request.allowed_roots_utf8);
+    const vove::search::AllowedRootFilter filter(request.allowed_roots_utf8);
+    const auto &roots = filter.normalized_roots();
     if (request.query_utf8.empty() || roots.empty() || request.maximum_results == 0U) {
         return fail(request.generation, SearchStatus::invalid_request,
                     "query and allowed roots are required");
@@ -293,7 +294,7 @@ int run(const SearchRequest &request) {
         }
         DWORD index{};
         for (; index < count && accepted < request.maximum_results; ++index) {
-            auto entry = make_entry(index, accepted + 1U, roots);
+            auto entry = make_entry(index, accepted + 1U, filter);
             if (entry.path_utf8.empty()) {
                 continue;
             }

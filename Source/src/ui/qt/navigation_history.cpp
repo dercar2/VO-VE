@@ -17,19 +17,24 @@ bool same_path(const QString &left, const QString &right) {
 }
 } // namespace
 
-void NavigationHistory::visit(const QString &path) {
+void NavigationHistory::visit(const QString &path, const bool returning_to_parent) {
     NavigationEntry next{.path = path};
-    // Find saved state before truncating the forward branch, as in the catalog UI.
-    for (auto it = entries_.crbegin(); it != entries_.crend(); ++it) {
-        if (it->saved && same_path(it->path, path)) {
-            next.grid = it->grid;
-            next.saved = true;
-            break;
-        }
+    if (returning_to_parent) {
+        const auto use_parent = [&](const NavigationEntry &entry) {
+            if (entry.saved && same_path(entry.path, path)) {
+                next.grid = entry.grid;
+                next.saved = true;
+            }
+        };
+        for (int i = index_; i >= 0 && !next.saved; --i) use_parent(entries_[i]);
+        // The parent can also have been visited only on the forward branch.
+        for (auto i = index_ + 1; i < entries_.size() && !next.saved; ++i) use_parent(entries_[i]);
     }
     while (entries_.size() - 1 > index_) entries_.removeLast();
     if (entries_.isEmpty() || !same_path(entries_.back().path, path)) {
         entries_.push_back(std::move(next));
+    } else {
+        entries_.back() = std::move(next);
     }
     if (entries_.size() > 128) entries_.removeFirst();
     index_ = static_cast<int>(entries_.size()) - 1;

@@ -65,7 +65,8 @@ SelectionController::SelectionController(QListView &view, DirectoryListModel &mo
     bind(actions_.copy_paths, &SelectionController::copy_selected_paths);
     bind(actions_.copy_objects, &SelectionController::copy_selected_objects);
     if (actions_.paste_objects) connect(actions_.paste_objects, &QAction::triggered, this, [this] {
-        update_clipboard_actions();
+        read_clipboard_hint();
+        update_paste_action();
         if (actions_.paste_objects->isEnabled() && callbacks_.paste_requested)
             callbacks_.paste_requested();
     });
@@ -82,13 +83,31 @@ SelectionController::SelectionController(QListView &view, DirectoryListModel &mo
         if (!availability().trash_view)
             if (const auto *entry = model_.entry_at(index)) open_entry(*entry);
     });
-    if (view.selectionModel()) connect(view.selectionModel(), &QItemSelectionModel::selectionChanged,
-                                      this, [this] {
-        if (callbacks_.refresh_command_actions) callbacks_.refresh_command_actions();
-        update_clipboard_actions();
+    if (auto *selection = view.selectionModel()) {
+        connect(selection, &QItemSelectionModel::selectionChanged, this,
+                &SelectionController::refresh_selection_actions);
+        connect(selection, &QItemSelectionModel::currentChanged, this, [this, selection] {
+            if (!selection->hasSelection()) refresh_selection_actions();
+        });
+    }
+    const auto invalidate = [this] {
+        summaryRanges_.clear();
+        refresh_selection_actions();
+    };
+    connect(&model_, &QAbstractItemModel::modelReset, this, invalidate);
+    connect(&model_, &QAbstractItemModel::layoutChanged, this, invalidate);
+    connect(&model_, &QAbstractItemModel::rowsInserted, this, invalidate);
+    connect(&model_, &QAbstractItemModel::rowsRemoved, this, invalidate);
+    connect(&model_, &QAbstractItemModel::dataChanged, this,
+            [invalidate](const QModelIndex &, const QModelIndex &, const QList<int> &roles) {
+        if (roles.isEmpty() || roles.contains(DirectoryListModel::EntryPathRole) ||
+            roles.contains(DirectoryListModel::EntryKindRole)) invalidate();
     });
-    connect(QApplication::clipboard(), &QClipboard::dataChanged, this,
-            &SelectionController::update_clipboard_actions);
+    connect(QApplication::clipboard(), &QClipboard::dataChanged, this, [this] {
+        read_clipboard_hint();
+        update_paste_action();
+    });
+    read_clipboard_hint();
     update_clipboard_actions();
 }
 
@@ -122,20 +141,60 @@ SelectionSnapshot SelectionController::selection_snapshot() const {
 bool SelectionController::invoke_selection_command(const SelectionCommand &command) const {
     return dispatch_selection_command(selection_snapshot(), command);
 }
-QString SelectionController::selection_status_text() const {
-    if (!view_ || !view_->selectionModel()) return {};
-    const auto rows = view_->selectionModel()->selectedRows();
-    if (rows.size() < 2) return {};
-    qulonglong directories{}, files{};
-    for (const auto &row : rows) {
-        if (const auto *entry = model_.entry_at(row)) {
-            if (entry->kind == core::EntryKind::directory) ++directories;
-            else ++files;
+SelectionActionSummary SelectionController::action_summary() const {
+    SelectionActionSummary result;
+    if (!view_ || !view_->selectionModel()) return result;
+    const auto ranges = view_->selectionModel()->selection();
+    // A navigation restore can change the selection with its signals blocked.
+    if (!ranges.isEmpty() && ranges == summaryRanges_) return cachedSummary_;
+    const core::DirectoryEntry *first{};
+    QString parent_spelling;
+    QString absolute_parent;
+    const auto absolute = [](const QFileInfo &info) {
+        return QDir::cleanPath(QDir::fromNativeSeparators(info.absolutePath()));
+    };
+    const auto visit = [&](const QModelIndex &index) {
+        const auto *entry = model_.entry_at(index);
+        if (!entry) return;
+        ++result.count;
+        if (entry->kind == core::EntryKind::directory) ++result.directories;
+        else if (entry->kind != core::EntryKind::file) result.all_ordinary = false;
+        if (!first) first = entry;
+        else if (result.same_parent) {
+            if (parent_spelling.isNull()) {
+                const QFileInfo initial(QString::fromUtf8(first->path_utf8));
+                parent_spelling = initial.path();
+                absolute_parent = absolute(initial);
+            }
+            const QFileInfo candidate(QString::fromUtf8(entry->path_utf8));
+            // Siblings normally arrive with the same directory spelling. Only alternate
+            // spellings need the full absolute, platform-specific path comparison.
+            if (candidate.path() == parent_spelling) return;
+#ifdef Q_OS_WIN
+            constexpr auto sensitivity = Qt::CaseInsensitive;
+#else
+            constexpr auto sensitivity = Qt::CaseSensitive;
+#endif
+            result.same_parent = absolute_parent.compare(absolute(candidate), sensitivity) == 0;
         }
+    };
+    if (ranges.isEmpty()) {
+        visit(view_->currentIndex());
+        return result;
     }
+    for (const auto &range : ranges)
+        for (int row = range.top(); row <= range.bottom(); ++row) visit(model_.index(row, 0));
+    result.has_selection = result.count != 0;
+    summaryRanges_ = ranges;
+    cachedSummary_ = result;
+    return result;
+}
+QString SelectionController::selection_status_text() const { return selection_status_text(action_summary()); }
+QString SelectionController::selection_status_text(const SelectionActionSummary &summary) const {
+    if (summary.count < 2) return {};
     return tr("Selected: %1 of %2 folders \xC2\xB7 %3 of %4 files")
-        .arg(directories).arg(static_cast<qulonglong>(model_.visible_directories()))
-        .arg(files).arg(static_cast<qulonglong>(model_.visible_files()));
+        .arg(summary.directories).arg(static_cast<qulonglong>(model_.visible_directories()))
+        .arg(summary.count - summary.directories).arg(static_cast<qulonglong>(model_.visible_files()));
 }
 void SelectionController::copy_selected_names() {
     QStringList values;
@@ -153,8 +212,13 @@ void SelectionController::copy_selected_paths() {
     if (callbacks_.status) callbacks_.status(tr("Paths copied: %1").arg(values.size()));
 }
 std::unique_ptr<QMimeData> SelectionController::file_mime_data() const {
-    if (availability().trash_view || !view_ || !view_->selectionModel() ||
-        view_->selectionModel()->selectedRows().isEmpty()) return {};
+    if (availability().trash_view || !view_ || !view_->selectionModel()) return {};
+    qsizetype count{};
+    for (const auto &range : view_->selectionModel()->selection()) {
+        count += range.height();
+        if (count > 1024) return {};
+    }
+    if (!count) return {};
     const auto entries = selected_entries_in_view_order();
     if (entries.size() > 1024 || !ordinary_objects(entries)) return {};
     auto mime = std::make_unique<QMimeData>();
@@ -171,18 +235,31 @@ std::unique_ptr<QMimeData> SelectionController::file_mime_data() const {
 void SelectionController::copy_selected_objects() {
     if (auto mime = file_mime_data()) QApplication::clipboard()->setMimeData(mime.release());
 }
-void SelectionController::update_clipboard_actions() {
-    const auto state = availability();
-    const auto entries = selected_entries_in_view_order();
-    const auto selected = view_ && view_->selectionModel() &&
-                          !view_->selectionModel()->selectedRows().isEmpty();
-    if (actions_.copy_objects) actions_.copy_objects->setEnabled(!state.trash_view && selected &&
-        entries.size() <= 1024 && ordinary_objects(entries));
-    if (actions_.copy_paths) actions_.copy_paths->setEnabled(!state.trash_view && selected && !entries.isEmpty());
+void SelectionController::read_clipboard_hint() {
+    if (!actions_.paste_objects) return;
     const auto *mime = QApplication::clipboard()->mimeData();
-    if (actions_.paste_objects) actions_.paste_objects->setEnabled(
-        callbacks_.can_paste_objects && callbacks_.can_paste_objects() && mime && mime->hasUrls());
-    if (callbacks_.selection_summary_changed) callbacks_.selection_summary_changed(selection_status_text());
+    clipboardHasUrls_ = mime && mime->hasUrls();
+}
+void SelectionController::update_paste_action() {
+    if (!actions_.paste_objects) return;
+    actions_.paste_objects->setEnabled(
+        clipboardHasUrls_ && callbacks_.can_paste_objects && callbacks_.can_paste_objects());
+}
+void SelectionController::refresh_selection_actions() {
+    if (callbacks_.refresh_command_actions) callbacks_.refresh_command_actions();
+    else apply_clipboard_actions(action_summary(), presentedTrashView_);
+}
+void SelectionController::update_clipboard_actions() {
+    apply_clipboard_actions(action_summary(), availability().trash_view);
+    update_paste_action();
+}
+void SelectionController::apply_clipboard_actions(const SelectionActionSummary &summary, bool trash_view) {
+    presentedTrashView_ = trash_view;
+    const bool selected = summary.has_selection && !trash_view;
+    if (actions_.copy_objects) actions_.copy_objects->setEnabled(selected && summary.count <= 1024 &&
+                                                               summary.all_ordinary);
+    if (actions_.copy_paths) actions_.copy_paths->setEnabled(selected);
+    if (callbacks_.selection_summary_changed) callbacks_.selection_summary_changed(selection_status_text(summary));
 }
 
 std::unique_ptr<QMenu> SelectionController::create_context_menu(const QPoint &position) {
@@ -199,10 +276,9 @@ std::unique_ptr<QMenu> SelectionController::create_context_menu(const QPoint &po
     }
     if (!view_->selectionModel()->isSelected(clicked))
         view_->selectionModel()->setCurrentIndex(clicked, QItemSelectionModel::ClearAndSelect);
+    else refresh_selection_actions();
     const auto entries = selected_entries_in_view_order();
     if (entries.isEmpty()) return {};
-    if (callbacks_.refresh_command_actions) callbacks_.refresh_command_actions();
-    update_clipboard_actions();
     if (actions_.copy_names) actions_.copy_names->setText(entries.size() == 1 ? tr("Copy name") : tr("Copy names"));
     if (actions_.copy_paths) actions_.copy_paths->setText(entries.size() == 1 ? tr("Copy full path") : tr("Copy full paths"));
     if (entries.size() == 1) {

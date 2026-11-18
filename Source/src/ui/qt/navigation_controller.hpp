@@ -62,10 +62,10 @@ class NavigationController final : public QObject {
     void restore_reveal();
     [[nodiscard]] QModelIndex index_for_path(const QString &path) const;
     [[nodiscard]] GridViewState capture_grid() const;
+    [[nodiscard]] GridViewState capture_catalog_grid() const;
     void restore_grid(const GridViewState &state);
     [[nodiscard]] const QString &path() const noexcept { return path_; }
     [[nodiscard]] bool restore_pending() const noexcept { return pending_.has_value(); }
-    [[nodiscard]] bool reveal_pending() const noexcept { return !reveal_paths_.isEmpty(); }
 
   protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -81,6 +81,7 @@ class NavigationController final : public QObject {
     QString path_;
     QStringList reveal_paths_;
     bool ready_{};
+    bool keyboard_current_{};
     bool reveal_from_search_{};
 };
 } // namespace vove::ui

@@ -76,7 +76,6 @@ class FavoritesView final : public QListWidget {
   public:
     explicit FavoritesView(QWidget *parent = nullptr);
     void set_drop_target_item(QListWidgetItem *item);
-    void clear_drop_target_item();
     void set_drop_target_theme(const QColor &background, const QColor &border);
 
   protected:

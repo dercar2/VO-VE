@@ -81,4 +81,8 @@ struct RuntimeOptions {
 [[nodiscard]] RuntimeExitCode run_worker_runtime(NativeIoHandle input, NativeIoHandle output,
                                                  const RuntimeOptions &options = {});
 
+[[nodiscard]] int run_production_worker(std::string_view build_id, CapabilitySet handler_capabilities,
+                                        RuntimeExecutor executor,
+                                        AnimationExecutor animation_executor = nullptr);
+
 } // namespace vove::worker

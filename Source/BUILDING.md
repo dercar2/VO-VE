@@ -1,7 +1,7 @@
 # Building VO-VE
 
-Generated from clean tracked WORK at commit 79b451a81118d8ae36a8a4f2b6fde792e9ac622d.
-Build label: UI-POLISH-20261112
+Generated from clean tracked WORK at commit 3ad8a55887bd1f7d75c1107c7a0ff2ba0aefd146.
+Build label: CATALOG-NAV-20261118
 In the public tag archive, this snapshot is the Source/ directory beside Site/.
 See PUBLIC-DISTRIBUTION.md (added during release assembly) for pinned supplement URLs
 and SHA-256 digests. LICENSE, THIRD_PARTY_NOTES.md and dependency notices accompany the source.

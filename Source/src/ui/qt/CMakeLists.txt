@@ -1118,6 +1118,7 @@ if(BUILD_TESTING AND VOVE_BUILD_TESTS)
         directory_list_model.hpp
     )
     target_include_directories(vove-qt-model-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(vove-qt-model-tests PRIVATE VOVE_TEST_ROW_INDEX_REBUILDS)
     target_link_libraries(vove-qt-model-tests PRIVATE vove::catalog vove::core Qt6::Test Qt6::Widgets)
     vove_copy_cxx_runtime(vove-qt-model-tests)
     vove_enable_warnings(vove-qt-model-tests)

@@ -9,6 +9,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QListView>
 #include <QMenu>
@@ -48,11 +49,17 @@ NavigationController::NavigationController(DirectoryListModel &model, Navigation
 }
 
 bool NavigationController::eventFilter(QObject *watched, QEvent *event) {
-    if (pending_ && event && views_.grid &&
+    if ((!ready_ || pending_) && event && views_.grid &&
         (watched == views_.grid || watched == views_.grid->viewport() ||
          watched == views_.grid->verticalScrollBar()) &&
         (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::Wheel ||
-         event->type() == QEvent::KeyPress || event->type() == QEvent::TouchBegin)) cancel_restore();
+         event->type() == QEvent::KeyPress || event->type() == QEvent::TouchBegin)) {
+        if (!ready_ && event->type() == QEvent::KeyPress) {
+            const auto key = static_cast<QKeyEvent *>(event)->key();
+            if (key >= Qt::Key_Home && key <= Qt::Key_PageDown) keyboard_current_ = true;
+        } else keyboard_current_ = false;
+        if (pending_) cancel_restore();
+    }
     return QObject::eventFilter(watched, event);
 }
 
@@ -70,13 +77,15 @@ void NavigationController::open(const QString &path, const bool add_to_history,
         normalized = QDir::cleanPath(QDir(path_.isEmpty() ? QDir::currentPath() : path_)
                                         .absoluteFilePath(normalized));
     }
-    if (add_to_history) history_.visit(normalized);
+    if (add_to_history) history_.visit(normalized, !reveal_child.isEmpty());
     pending_ = history_.restore_for(normalized, reveal_child);
     path_ = normalized;
     ready_ = false;
+    keyboard_current_ = false;
     if (views_.address) views_.address->setText(QDir::toNativeSeparators(path_));
     call(actions_.settings_changed);
     if (actions_.open_directory) actions_.open_directory(path_);
+    if (!pending_ && views_.grid) views_.grid->scrollToTop();
     update_actions();
 }
 
@@ -103,7 +112,8 @@ void NavigationController::show_location_caption(const QString &caption) {
     if (views_.address) views_.address->setText(caption);
 }
 void NavigationController::save() {
-    if (ready_ && (!actions_.ordinary_view || actions_.ordinary_view())) history_.save(path_, capture_grid());
+    if (!pending_ && (ready_ || model_.rowCount() > 0) &&
+        (!actions_.ordinary_view || actions_.ordinary_view())) history_.save(path_, capture_catalog_grid());
 }
 void NavigationController::catalog_started() { ready_ = false; }
 void NavigationController::catalog_ready() {
@@ -201,6 +211,21 @@ GridViewState NavigationController::capture_grid() const {
         state.top_offset = views_.grid->visualRect(top).top();
         state.has_top = true;
     }
+    return state;
+}
+GridViewState NavigationController::capture_catalog_grid() const {
+    auto state = capture_grid();
+    if (ready_ || pending_ || (actions_.ordinary_view && !actions_.ordinary_view())) return state;
+
+    // Until the first listing completes, the first streamed item is not a scroll anchor.
+    // An explicitly selected, visible item takes precedence over the initial top position.
+    const auto current = views_.grid->currentIndex();
+    if (current.isValid() && (keyboard_current_ || views_.grid->selectionModel()->isSelected(current)) &&
+        views_.grid->viewport()->rect().intersects(views_.grid->visualRect(current))) {
+        state.has_top = true;
+        state.top_id = state.current_id;
+        state.top_offset = views_.grid->visualRect(current).top();
+    } else if (state.scroll_value == views_.grid->verticalScrollBar()->minimum()) state.has_top = false;
     return state;
 }
 void NavigationController::restore_grid(const GridViewState &state) {

@@ -78,9 +78,9 @@ std::uint64_t GlobalSearchClient::start(const QString &query, const QStringList 
     for (const auto &root : allowed_roots) {
         roots.push_back(utf8(root));
     }
-    allowedRoots_ = search::normalize_allowed_roots(roots);
+    allowedRoots_ = search::AllowedRootFilter(roots);
     const auto query_utf8 = utf8(query.trimmed());
-    if (query_utf8.empty() || allowedRoots_.empty() || maximum_results == 0U) {
+    if (query_utf8.empty() || allowedRoots_.normalized_roots().empty() || maximum_results == 0U) {
         fail_current(search::SearchStatus::invalid_request,
                      QStringLiteral("query and allowed roots are required"));
         return generation;
@@ -89,7 +89,7 @@ std::uint64_t GlobalSearchClient::start(const QString &query, const QStringList 
     search::SearchRequest request;
     request.generation = generation;
     request.query_utf8 = query_utf8;
-    request.allowed_roots_utf8 = allowedRoots_;
+    request.allowed_roots_utf8 = allowedRoots_.normalized_roots();
     request.maximum_results = std::min(maximum_results, search::kMaximumSearchResults);
     try {
         requestFrame_ = bytes(
@@ -138,7 +138,7 @@ void GlobalSearchClient::cancel() {
     finalBatch_.reset();
     incoming_.clear();
     requestFrame_.clear();
-    allowedRoots_.clear();
+    allowedRoots_ = {};
     if (process_ == nullptr) {
         return;
     }
@@ -222,7 +222,7 @@ void GlobalSearchClient::consume_output(QProcess *process, const std::uint64_t g
             return;
         }
         const auto escaped = std::ranges::find_if(batch.entries, [this](const auto &entry) {
-            return !search::path_is_within_allowed_roots(entry.path_utf8, allowedRoots_);
+            return !allowedRoots_.contains(entry.path_utf8);
         });
         if (escaped != batch.entries.end()) {
             fail_current(search::SearchStatus::io_error,
@@ -299,6 +299,7 @@ void GlobalSearchClient::fail_current(const search::SearchStatus status, const Q
     timeout_->stop();
     exitTimeout_->stop();
     incoming_.clear();
+    allowedRoots_ = {};
     if (process != nullptr) {
         retire_process(process);
     }

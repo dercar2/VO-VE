@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(VO_VE VERSION 1.0.3 LANGUAGES C CXX)
+project(VO_VE VERSION 1.0.4 LANGUAGES C CXX)
 
 option(VOVE_BUILD_TESTS "Build headless core tests" ON)
 option(VOVE_BUILD_BENCHMARKS "Build headless benchmarks" ON)
@@ -432,6 +432,7 @@ if(VOVE_BUILD_FUZZERS)
 endif()
 
 add_library(vove-worker-runtime STATIC
+    src/worker/production_worker.cpp
     src/worker/runtime.cpp
 )
 target_include_directories(vove-worker-runtime PRIVATE src/worker)
@@ -522,6 +523,8 @@ if(VOVE_BUILD_TESTS AND UNIX)
     target_compile_definitions(vove-fileops PRIVATE VOVE_DURABLE_JOURNAL_TEST_HOOKS=1)
 endif()
 if(VOVE_BUILD_TESTS)
+    set_property(SOURCE src/fileops/current_operation_journal.cpp APPEND PROPERTY
+        COMPILE_DEFINITIONS VOVE_CURRENT_JOURNAL_READ_TEST_HOOK=1)
     target_compile_definitions(vove-fileops PRIVATE
         VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS=1
         VOVE_TRASH_CATALOG_TEST_HOOKS=1

@@ -425,6 +425,7 @@ void FileCommandController::Impl::set_create_directory_in_flight(const bool in_f
 }
 
 OperationAvailability FileCommandController::Impl::operation_availability() const {
+    const auto view = catalog();
     return {
         .mutation_busy = renameInFlight_ || deleteInFlight_ || transferInFlight_ ||
             createDirectoryInFlight_ || fileOperationService_.busy() ||
@@ -448,10 +449,10 @@ OperationAvailability FileCommandController::Impl::operation_availability() cons
             property("fileTransferRecoveryPending").toBool() ||
             property("directoryTransferRecoveryPending").toBool() ||
             property("fileOperationJournalBlocked").toBool(),
-        .trash_view = catalog().trash_view,
-        .global_search = catalog().global_search,
-        .recursive_view = catalog().recursive_view,
-        .catalog_ready = catalog().ready,
+        .trash_view = view.trash_view,
+        .global_search = view.global_search,
+        .recursive_view = view.recursive_view,
+        .catalog_ready = view.ready,
     };
 }
 
@@ -528,28 +529,31 @@ void FileCommandController::Impl::notify_file_in_use(fileops::OperationStatus st
     if (status == fileops::OperationStatus::file_in_use) ports_.file_in_use();
 }
 
-void FileCommandController::Impl::update_rename_action() {
-    const auto entries = selected_entries_in_view_order();
-    const auto availability = operation_availability();
-    const auto same_parent = entries.size() < 2 || std::ranges::all_of(entries, [&](const auto &entry) {
-        return same_directory_path(QFileInfo(QString::fromUtf8(entry.path_utf8)).absolutePath(),
-            QFileInfo(QString::fromUtf8(entries.front().path_utf8)).absolutePath());
-    });
-    const auto all_objects = !entries.isEmpty() && std::ranges::all_of(entries, [](const auto &entry) {
-        return entry.kind == core::EntryKind::file || entry.kind == core::EntryKind::directory;
-    });
-    FileCommandActionState state;
-    state.availability = availability;
-    state.rename_text = entries.size() > 1 ? QCoreApplication::translate("MainWindow", "Batch rename")
+FileSelectionActionState present_file_selection(const SelectionActionSummary &selection,
+                                               bool trash_view, bool mutation_enabled) {
+    FileSelectionActionState state;
+    state.selection = selection;
+    const auto summary = trash_view ? SelectionActionSummary{} : selection;
+    const bool mutable_objects = summary.count != 0 && summary.all_ordinary && mutation_enabled;
+    state.rename_text = summary.count > 1 ? QCoreApplication::translate("MainWindow", "Batch rename")
                                           : QCoreApplication::translate("MainWindow", "Rename");
-    state.rename_tooltip = same_parent ? QString{} : QCoreApplication::translate(
+    state.rename_tooltip = summary.same_parent ? QString{} : QCoreApplication::translate(
         "MainWindow", "Batch renaming requires items from one folder");
-    state.delete_text = entries.size() > 1 ? QCoreApplication::translate("MainWindow", "Delete Objects…")
-        : entries.size() == 1 && entries.front().kind == core::EntryKind::directory
+    state.delete_text = summary.count > 1 ? QCoreApplication::translate("MainWindow", "Delete Objects…")
+        : summary.count == 1 && summary.directories == 1
             ? QCoreApplication::translate("MainWindow", "Delete Folder…")
             : QCoreApplication::translate("MainWindow", "Delete…");
-    state.rename_enabled = all_objects && same_parent && availability.selection_mutation_allowed();
-    state.delete_enabled = all_objects && availability.selection_mutation_allowed();
+    state.rename_enabled = mutable_objects && summary.same_parent;
+    state.delete_enabled = mutable_objects;
+    return state;
+}
+
+void FileCommandController::Impl::update_rename_action() {
+    const auto availability = operation_availability();
+    const auto summary = ports_.selection_for_actions ? ports_.selection_for_actions()
+                                                      : SelectionActionSummary{};
+    FileCommandActionState state{present_file_selection(summary, availability.trash_view,
+        availability.selection_mutation_allowed()), availability};
     state.trash_enabled = availability.trash_catalog_allowed();
     state.unfinished_enabled = availability.unfinished_operation_allowed();
     state.create_directory_enabled = availability.create_directory_allowed();

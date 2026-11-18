@@ -138,7 +138,6 @@ class PreviewController final : public QObject {
     void cancelFolderPreviews();
     void markPreviewUnverified(const QString &path);
     void markAllPreviewsUnverified();
-    void invalidateDisplayImages();
     void retranslate();
     // Completion follows component detection and any preview retry handling.
     void refreshExternalComponents(std::function<void()> completion = {});

@@ -103,9 +103,8 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
         .settings_changed = [this] { schedule_settings_save(); },
         .selection_changed = [this] {
             preview_->selectedEntryChanged(shell_->widgets().listView->currentIndex());
-            if (selection_) selection_->update_clipboard_actions();
         },
-        .commands_changed = [this] { if (commands_) commands_->update_actions(); },
+        .commands_changed = [this] { refresh_selection_presentation(); },
         .previews_changed = [this] {
             preview_->updatePreviewContext({catalog_->search_active() ? PreviewCatalogMode::global_search :
                 catalog_->recursive_active() ? PreviewCatalogMode::recursive : catalog_->trash_active() ?
@@ -117,6 +116,7 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
     FileCommandPorts ports;
     ports.dialog_owner = this;
     ports.selection = [this] { return selection_ ? selection_->selection_snapshot() : SelectionSnapshot{}; };
+    ports.selection_for_actions = [this] { return selection_ ? selection_->action_summary() : SelectionActionSummary{}; };
     ports.catalog = [this] {
         return FileCommandCatalogState{catalog_->path(),
             catalog_->update().state == catalog::CatalogSessionState::ready,
@@ -185,7 +185,7 @@ MainWindow::MainWindow(QString initial_path, QWidget *parent, QString preview_he
         .native_open_allowed = [this] { return !shuttingDown_; },
         .external_applications_changed = [this] { schedule_settings_save(); },
         .trash_menu_requested = [this](QPoint point) { trash_->show_context_menu(point); },
-        .refresh_command_actions = [this] { commands_->update_actions(); },
+        .refresh_command_actions = [this] { refresh_selection_presentation(); },
         .selection_summary_changed = [this](QString text) { status_->setSelectionSummary(std::move(text)); },
     });
     places_ = std::make_unique<PlacesController>(PlacesViewPort{
@@ -308,7 +308,6 @@ void MainWindow::retranslate_modules() {
     if (places_) places_->retranslate();
     if (status_) { status_->setInterfaceFont(qApp->font()); status_->retranslate(); }
     if (commands_) commands_->update_actions();
-    if (selection_) selection_->update_clipboard_actions();
     if (catalog_ && selection_) catalog_->update_tools();
 }
 void MainWindow::publish_catalog_status() {
@@ -326,19 +325,30 @@ void MainWindow::publish_operation_activity() {
     catalog_->update_tools();
     if (selection_) selection_->update_clipboard_actions();
 }
-void MainWindow::apply_command_actions(const FileCommandActionState &state) {
+void MainWindow::refresh_selection_presentation() {
+    if (selection_) apply_selection_presentation(present_file_selection(
+        selection_->action_summary(), presentedTrashView_, presentedSelectionMutationEnabled_));
+}
+void MainWindow::apply_selection_presentation(const FileSelectionActionState &state) {
     const auto &w = shell_->widgets();
     w.renameAction->setText(state.rename_text);
     w.renameAction->setToolTip(state.rename_tooltip);
     w.renameAction->setEnabled(state.rename_enabled);
     w.deleteAction->setText(state.delete_text);
     w.deleteAction->setEnabled(state.delete_enabled);
+    if (selection_) selection_->apply_clipboard_actions(state.selection, presentedTrashView_);
+}
+void MainWindow::apply_command_actions(const FileCommandActionState &state) {
+    presentedTrashView_ = state.availability.trash_view;
+    presentedSelectionMutationEnabled_ = state.availability.selection_mutation_allowed();
+    apply_selection_presentation(state);
+    const auto &w = shell_->widgets();
     w.trashAction->setEnabled(state.trash_enabled);
     w.unfinishedOperationAction->setEnabled(state.unfinished_enabled);
     w.createFolderAction->setEnabled(state.create_directory_enabled);
     w.createFolderButton->setEnabled(state.create_directory_enabled);
     if (catalog_) catalog_->update_tools();
-    if (selection_) selection_->update_clipboard_actions();
+    if (selection_) selection_->update_paste_action();
 }
 WindowSettingsSnapshot MainWindow::capture_settings() const {
     auto snapshot = shell_->capture_presentation(preferences_);

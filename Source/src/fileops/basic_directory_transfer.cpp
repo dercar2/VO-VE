@@ -6060,6 +6060,95 @@ void cleanup_manifestless_control_directory(const std::filesystem::path &manifes
     result.detail_utf8 = "completed stale recovery-control cleanup; no manifest remains";
 }
 
+BasicDirectoryTransferResult remove_audited_retired_staging(
+    const BasicDirectoryTransferManifest &manifest, const std::filesystem::path &manifest_path,
+    const TreeCapture &source_capture, const std::filesystem::path &retirement,
+    const std::filesystem::path &quarantine_path) {
+    const auto retirement_capture = capture_owned_staging_tree(retirement);
+    if (!retirement_capture.ok()) {
+        auto result = failure(retirement_capture.status,
+                              "retired unfinished data could not be captured before removal",
+                              retirement_capture.error, retirement_capture.platform_code);
+        result.recovery_available = true;
+        result.staging_destination = retirement;
+        result.destination = manifest.destination;
+        result.manifest_path = manifest_path;
+        return result;
+    }
+#ifdef VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS
+    pause_after_source_cleanup_validation_when_requested();
+    pause_after_staging_retirement_when_requested();
+#endif
+    const auto current_source_capture = capture_tree(manifest.source);
+    if (!same_tree_capture(source_capture, current_source_capture)) {
+        auto result =
+            failure(current_source_capture.ok() ? BasicDirectoryTransferStatus::source_changed
+                                                : current_source_capture.status,
+                    current_source_capture.ok()
+                        ? "source changed before retired unfinished data could be removed"
+                        : current_source_capture.detail_utf8,
+                    current_source_capture.error, current_source_capture.platform_code);
+        result.recovery_available = true;
+        result.staging_destination = retirement;
+        result.destination = manifest.destination;
+        result.manifest_path = manifest_path;
+        return result;
+    }
+    const auto current_retirement_capture = capture_owned_staging_tree(retirement);
+    if (!same_tree_capture(retirement_capture, current_retirement_capture)) {
+        auto result = failure(
+            current_retirement_capture.ok() ? BasicDirectoryTransferStatus::staging_changed
+                                            : current_retirement_capture.status,
+            current_retirement_capture.ok() ? "retired unfinished data changed before removal"
+                                            : current_retirement_capture.detail_utf8,
+            current_retirement_capture.error, current_retirement_capture.platform_code);
+        result.recovery_available = true;
+        result.staging_destination = retirement;
+        result.destination = manifest.destination;
+        result.manifest_path = manifest_path;
+        return result;
+    }
+#ifdef VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS
+    pause_before_cleanup_quarantine_when_requested();
+#endif
+    auto quarantine = retirement;
+    auto quarantined_capture = current_retirement_capture;
+    if (retirement != quarantine_path) {
+        auto quarantined = quarantine_owned_tree(retirement, current_retirement_capture,
+                                                 quarantine, quarantined_capture);
+        if (!quarantined.ok()) {
+            quarantined.recovery_available = true;
+            quarantined.staging_destination = quarantine.empty() ? retirement : quarantine;
+            quarantined.destination = manifest.destination;
+            quarantined.manifest_path = manifest_path;
+            return quarantined;
+        }
+    }
+    const auto final_source_capture = capture_tree(manifest.source);
+    if (!same_tree_capture(current_source_capture, final_source_capture)) {
+        auto result =
+            failure(final_source_capture.ok() ? BasicDirectoryTransferStatus::source_changed
+                                              : final_source_capture.status,
+                    final_source_capture.ok()
+                        ? "source changed after unfinished data entered cleanup quarantine"
+                        : final_source_capture.detail_utf8,
+                    final_source_capture.error, final_source_capture.platform_code);
+        result.recovery_available = true;
+        result.staging_destination = quarantine;
+        result.destination = manifest.destination;
+        result.manifest_path = manifest_path;
+        return result;
+    }
+    auto removed = remove_captured_owned_tree(quarantine, quarantined_capture);
+    if (!removed.ok()) {
+        removed.recovery_available = true;
+        removed.staging_destination = quarantine;
+        removed.destination = manifest.destination;
+        removed.manifest_path = manifest_path;
+    }
+    return removed;
+}
+
 BasicDirectoryTransferResult
 resume_basic_directory_copy_impl(const std::filesystem::path &manifest_path,
                                  const BasicDirectoryTransferProgressCallback &progress,
@@ -6625,87 +6714,9 @@ resume_basic_directory_copy_impl(const std::filesystem::path &manifest_path,
             audited.manifest_path = loaded.manifest_path;
             return audited;
         }
-        const auto retirement_capture = capture_owned_staging_tree(retirement);
-        if (!retirement_capture.ok()) {
-            auto result = failure(retirement_capture.status,
-                                  "retired unfinished data could not be captured before removal",
-                                  retirement_capture.error, retirement_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = retirement;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-#ifdef VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS
-        pause_after_source_cleanup_validation_when_requested();
-        pause_after_staging_retirement_when_requested();
-#endif
-        const auto current_source_capture = capture_tree(manifest.source);
-        if (!same_tree_capture(source_capture, current_source_capture)) {
-            auto result =
-                failure(current_source_capture.ok() ? BasicDirectoryTransferStatus::source_changed
-                                                    : current_source_capture.status,
-                        current_source_capture.ok()
-                            ? "source changed before retired unfinished data could be removed"
-                            : current_source_capture.detail_utf8,
-                        current_source_capture.error, current_source_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = retirement;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-        const auto current_retirement_capture = capture_owned_staging_tree(retirement);
-        if (!same_tree_capture(retirement_capture, current_retirement_capture)) {
-            auto result = failure(
-                current_retirement_capture.ok() ? BasicDirectoryTransferStatus::staging_changed
-                                                : current_retirement_capture.status,
-                current_retirement_capture.ok() ? "retired unfinished data changed before removal"
-                                                : current_retirement_capture.detail_utf8,
-                current_retirement_capture.error, current_retirement_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = retirement;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-#ifdef VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS
-        pause_before_cleanup_quarantine_when_requested();
-#endif
-        auto quarantine = retirement;
-        auto quarantined_capture = current_retirement_capture;
-        if (retirement != quarantine_path) {
-            auto quarantined = quarantine_owned_tree(retirement, current_retirement_capture,
-                                                     quarantine, quarantined_capture);
-            if (!quarantined.ok()) {
-                quarantined.recovery_available = true;
-                quarantined.staging_destination = quarantine.empty() ? retirement : quarantine;
-                quarantined.destination = manifest.destination;
-                quarantined.manifest_path = loaded.manifest_path;
-                return quarantined;
-            }
-        }
-        const auto final_source_capture = capture_tree(manifest.source);
-        if (!same_tree_capture(current_source_capture, final_source_capture)) {
-            auto result =
-                failure(final_source_capture.ok() ? BasicDirectoryTransferStatus::source_changed
-                                                  : final_source_capture.status,
-                        final_source_capture.ok()
-                            ? "source changed after unfinished data entered cleanup quarantine"
-                            : final_source_capture.detail_utf8,
-                        final_source_capture.error, final_source_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = quarantine;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-        auto removed = remove_captured_owned_tree(quarantine, quarantined_capture);
+        auto removed = remove_audited_retired_staging(
+            manifest, loaded.manifest_path, source_capture, retirement, quarantine_path);
         if (!removed.ok()) {
-            removed.recovery_available = true;
-            removed.staging_destination = quarantine;
-            removed.destination = manifest.destination;
-            removed.manifest_path = loaded.manifest_path;
             return removed;
         }
     }
@@ -6937,87 +6948,9 @@ BasicDirectoryTransferResult discard_basic_directory_transfer_impl(
             audited.manifest_path = loaded.manifest_path;
             return audited;
         }
-        const auto retirement_capture = capture_owned_staging_tree(retirement);
-        if (!retirement_capture.ok()) {
-            auto result = failure(retirement_capture.status,
-                                  "retired unfinished data could not be captured before removal",
-                                  retirement_capture.error, retirement_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = retirement;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-#ifdef VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS
-        pause_after_source_cleanup_validation_when_requested();
-        pause_after_staging_retirement_when_requested();
-#endif
-        const auto current_source_capture = capture_tree(manifest.source);
-        if (!same_tree_capture(source_capture, current_source_capture)) {
-            auto result =
-                failure(current_source_capture.ok() ? BasicDirectoryTransferStatus::source_changed
-                                                    : current_source_capture.status,
-                        current_source_capture.ok()
-                            ? "source changed before retired unfinished data could be removed"
-                            : current_source_capture.detail_utf8,
-                        current_source_capture.error, current_source_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = retirement;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-        const auto current_retirement_capture = capture_owned_staging_tree(retirement);
-        if (!same_tree_capture(retirement_capture, current_retirement_capture)) {
-            auto result = failure(
-                current_retirement_capture.ok() ? BasicDirectoryTransferStatus::staging_changed
-                                                : current_retirement_capture.status,
-                current_retirement_capture.ok() ? "retired unfinished data changed before removal"
-                                                : current_retirement_capture.detail_utf8,
-                current_retirement_capture.error, current_retirement_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = retirement;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-#ifdef VOVE_BASIC_DIRECTORY_TRANSFER_TEST_HOOKS
-        pause_before_cleanup_quarantine_when_requested();
-#endif
-        auto quarantine = retirement;
-        auto quarantined_capture = current_retirement_capture;
-        if (retirement != quarantine_path) {
-            auto quarantined = quarantine_owned_tree(retirement, current_retirement_capture,
-                                                     quarantine, quarantined_capture);
-            if (!quarantined.ok()) {
-                quarantined.recovery_available = true;
-                quarantined.staging_destination = quarantine.empty() ? retirement : quarantine;
-                quarantined.destination = manifest.destination;
-                quarantined.manifest_path = loaded.manifest_path;
-                return quarantined;
-            }
-        }
-        const auto final_source_capture = capture_tree(manifest.source);
-        if (!same_tree_capture(current_source_capture, final_source_capture)) {
-            auto result =
-                failure(final_source_capture.ok() ? BasicDirectoryTransferStatus::source_changed
-                                                  : final_source_capture.status,
-                        final_source_capture.ok()
-                            ? "source changed after unfinished data entered cleanup quarantine"
-                            : final_source_capture.detail_utf8,
-                        final_source_capture.error, final_source_capture.platform_code);
-            result.recovery_available = true;
-            result.staging_destination = quarantine;
-            result.destination = manifest.destination;
-            result.manifest_path = loaded.manifest_path;
-            return result;
-        }
-        auto removed = remove_captured_owned_tree(quarantine, quarantined_capture);
+        auto removed = remove_audited_retired_staging(
+            manifest, loaded.manifest_path, source_capture, retirement, quarantine_path);
         if (!removed.ok()) {
-            removed.recovery_available = true;
-            removed.staging_destination = quarantine;
-            removed.destination = manifest.destination;
-            removed.manifest_path = loaded.manifest_path;
             return removed;
         }
     }

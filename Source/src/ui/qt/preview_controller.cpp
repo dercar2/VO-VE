@@ -510,10 +510,6 @@ void PreviewController::markAllPreviewsUnverified() {
     views_.model->mark_previews_verification_pending();
 }
 
-void PreviewController::invalidateDisplayImages() {
-    monitor_profile_changed();
-}
-
 void PreviewController::refreshExternalComponents(std::function<void()> completion) {
     previewClient_.refresh_external_components(
         [this, completion = std::move(completion)](const bool changed) {

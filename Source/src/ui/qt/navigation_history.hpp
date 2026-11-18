@@ -33,7 +33,7 @@ struct PendingNavigationRestore {
 // Pure history state: paths are lexical, so visiting an offline share never probes it.
 class NavigationHistory final {
   public:
-    void visit(const QString &path);
+    void visit(const QString &path, bool returning_to_parent = false);
     void save(const QString &path, GridViewState state);
     [[nodiscard]] bool select(int index);
     [[nodiscard]] const NavigationEntry *current() const noexcept;

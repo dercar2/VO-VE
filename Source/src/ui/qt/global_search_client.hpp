@@ -54,7 +54,7 @@ class GlobalSearchClient final {
     QString helperOverride_;
     QByteArray incoming_;
     QByteArray requestFrame_;
-    std::vector<std::string> allowedRoots_;
+    search::AllowedRootFilter allowedRoots_;
     std::uint64_t nextGeneration_{};
     std::uint64_t activeGeneration_{};
     bool finalSeen_{};

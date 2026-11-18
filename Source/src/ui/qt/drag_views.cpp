@@ -409,10 +409,6 @@ void FavoritesView::set_drop_target_item(QListWidgetItem *item) {
     viewport()->update();
 }
 
-void FavoritesView::clear_drop_target_item() {
-    set_drop_target_item(nullptr);
-}
-
 void FavoritesView::set_drop_target_theme(const QColor &background, const QColor &border) {
     if (dropTargetBackground_ == background && dropTargetBorder_ == border) {
         return;

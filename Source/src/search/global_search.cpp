@@ -62,9 +62,7 @@ std::wstring wide_from_utf8(const std::string_view text) {
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool path_prefix(const std::string_view candidate, const std::string_view root) {
-    const auto candidate_wide = wide_from_utf8(candidate);
-    const auto root_wide = wide_from_utf8(root);
+bool wide_path_prefix(const std::wstring_view candidate_wide, const std::wstring_view root_wide) {
     if (candidate_wide.size() < root_wide.size() || root_wide.empty() ||
         CompareStringOrdinal(candidate_wide.data(), static_cast<int>(root_wide.size()),
                              root_wide.data(), static_cast<int>(root_wide.size()),
@@ -78,6 +76,10 @@ bool path_prefix(const std::string_view candidate, const std::string_view root) 
         return true;
     }
     return candidate_wide[root_wide.size()] == L'/' || candidate_wide[root_wide.size()] == L'\\';
+}
+
+bool path_prefix(const std::string_view candidate, const std::string_view root) {
+    return wide_path_prefix(wide_from_utf8(candidate), wide_from_utf8(root));
 }
 #else
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
@@ -126,6 +128,25 @@ bool path_is_within_allowed_roots(const std::string &path_utf8_value,
     return !normalized.empty() && std::ranges::any_of(normalized_roots_utf8, [&](const auto &root) {
         return path_prefix(normalized, root);
     });
+}
+
+AllowedRootFilter::AllowedRootFilter(const std::span<const std::string> roots_utf8)
+    : roots_(normalize_allowed_roots(roots_utf8)) {
+#ifdef _WIN32
+    wide_roots_.reserve(roots_.size());
+    for (const auto &root : roots_) wide_roots_.push_back(wide_from_utf8(root));
+#endif
+}
+
+bool AllowedRootFilter::contains(const std::string &path_utf8_value) const {
+#ifdef _WIN32
+    const auto candidate = wide_from_utf8(normalize_path(path_utf8_value));
+    return !candidate.empty() && std::ranges::any_of(wide_roots_, [&](const auto &root) {
+        return wide_path_prefix(candidate, root);
+    });
+#else
+    return path_is_within_allowed_roots(path_utf8_value, roots_);
+#endif
 }
 
 } // namespace vove::search

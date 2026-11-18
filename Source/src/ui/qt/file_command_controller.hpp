@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operation_availability.hpp"
+#include "selection_action_summary.hpp"
 #include "selection_command.hpp"
 #include "trash_dialog.hpp"
 #include "vove/fileops/file_operation_service.hpp"
@@ -45,13 +46,20 @@ struct FileCommandCatalogState {
     std::uint64_t search_generation{};
 };
 
-struct FileCommandActionState {
-    OperationAvailability availability;
+struct FileSelectionActionState {
+    SelectionActionSummary selection;
     QString rename_text;
     QString rename_tooltip;
     QString delete_text;
     bool rename_enabled{};
     bool delete_enabled{};
+};
+
+[[nodiscard]] FileSelectionActionState present_file_selection(
+    const SelectionActionSummary &selection, bool trash_view, bool mutation_enabled);
+
+struct FileCommandActionState : FileSelectionActionState {
+    OperationAvailability availability;
     bool trash_enabled{};
     bool unfinished_enabled{};
     bool create_directory_enabled{};
@@ -60,6 +68,7 @@ struct FileCommandActionState {
 struct FileCommandPorts {
     QWidget *dialog_owner{};
     std::function<SelectionSnapshot()> selection;
+    std::function<SelectionActionSummary()> selection_for_actions;
     std::function<FileCommandCatalogState()> catalog;
     std::function<std::vector<std::filesystem::path>(const QString &parent)> entry_names;
     std::function<std::size_t(const std::filesystem::path &manifest)> trash_operation_items;

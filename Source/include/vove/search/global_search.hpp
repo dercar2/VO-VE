@@ -48,4 +48,19 @@ normalize_allowed_roots(std::span<const std::string> roots_utf8);
 [[nodiscard]] bool path_is_within_allowed_roots(const std::string &path_utf8,
                                                 std::span<const std::string> normalized_roots_utf8);
 
+// Owned by one search request. Preparation and membership checks are purely lexical.
+class AllowedRootFilter {
+  public:
+    AllowedRootFilter() = default;
+    explicit AllowedRootFilter(std::span<const std::string> roots_utf8);
+    [[nodiscard]] const std::vector<std::string> &normalized_roots() const noexcept { return roots_; }
+    [[nodiscard]] bool contains(const std::string &path_utf8) const;
+
+  private:
+    std::vector<std::string> roots_;
+#ifdef _WIN32
+    std::vector<std::wstring> wide_roots_;
+#endif
+};
+
 } // namespace vove::search

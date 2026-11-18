@@ -137,10 +137,9 @@ std::string descendant_pattern(const std::string &root) {
     return pattern;
 }
 
-bool name_contains_query(const std::string &path, const std::string &query) {
+bool name_contains_query(const std::string &path, const std::string_view folded_query) {
     const auto name = std::filesystem::path(path).filename().string();
     const auto folded_name = vove::core::make_search_key(name);
-    const auto folded_query = vove::core::make_search_key(query);
     return !folded_query.empty() && folded_name.find(folded_query) != std::string::npos;
 }
 
@@ -493,6 +492,7 @@ int run(const SearchRequest &request) {
     std::uint64_t accepted{};
     bool truncated{};
     bool output_failed{};
+    const auto folded_query = vove::core::make_search_key(request.query_utf8);
     for (const auto &root : indexed_roots) {
         const auto raw_limit = std::min(
             maximumRawResults, std::max<std::size_t>(4096U, request.maximum_results * 32U + 1U));
@@ -501,7 +501,7 @@ int run(const SearchRequest &request) {
         const auto provider = run_plocate(
             *executable, database, *utf8_locale, patterns, raw_limit, [&](std::string path) {
                 if (!vove::search::path_is_within_allowed_roots(path, std::span(&root, 1U)) ||
-                    !name_contains_query(path, request.query_utf8) || emitted.contains(path)) {
+                    !name_contains_query(path, folded_query) || emitted.contains(path)) {
                     return true;
                 }
                 auto entry = make_entry(path, accepted + 1U);

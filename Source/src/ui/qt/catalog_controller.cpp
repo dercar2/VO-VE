@@ -268,7 +268,7 @@ void CatalogController::poll() {
     std::optional<QSignalBlocker> blocker;
     if (automatic) blocker.emplace(views_.grid->selectionModel());
     const auto previous = update_.state;
-    const auto grid = navigation_->capture_grid();
+    const auto grid = navigation_->capture_catalog_grid();
     catalog::CatalogSessionUpdate next;
     std::size_t received{};
     bool changed{};
