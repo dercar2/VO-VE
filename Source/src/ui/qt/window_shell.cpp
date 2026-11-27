@@ -31,6 +31,7 @@
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLocale>
 #include <QMainWindow>
@@ -47,6 +48,7 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QWidgetAction>
 
 #include <algorithm>
 #include <array>
@@ -444,6 +446,36 @@ void WindowShell::build_ui() {
     widgets_.donateAction->setObjectName(QStringLiteral("donateAction"));
     widgets_.reportIssueAction = widgets_.mainMenu->addAction(QString());
     widgets_.reportIssueAction->setObjectName(QStringLiteral("reportIssueAction"));
+    widgets_.mainMenu->addSeparator();
+    auto *theme_row = new QWidget(widgets_.mainMenu);
+    auto *theme_layout = new QHBoxLayout(theme_row);
+    theme_layout->setContentsMargins(8, 3, 8, 3);
+    theme_layout->setSpacing(8);
+    widgets_.themeLabel = new QLabel(theme_row);
+    widgets_.themeLabel->setObjectName(QStringLiteral("themeLabel"));
+    widgets_.themeLabel->setIndent(18);
+    widgets_.themeButtons = new QButtonGroup(theme_row);
+    theme_layout->addWidget(widgets_.themeLabel);
+    theme_layout->addWidget(create_theme_switch(widgets_.themeButtons, theme_row));
+    theme_layout->addStretch();
+    auto *theme_action = new QWidgetAction(widgets_.mainMenu);
+    theme_action->setObjectName(QStringLiteral("themeRowAction"));
+    theme_action->setDefaultWidget(theme_row);
+    widgets_.themeRowAction = theme_action;
+    widgets_.mainMenu->addAction(theme_action);
+    widgets_.mainMenu->installEventFilter(this);
+    const auto highlight_theme_row = [menu = widgets_.mainMenu, theme_row, label = widgets_.themeLabel](const bool active) {
+        auto palette = menu->palette();
+        if (active) palette.setColor(QPalette::Window, palette.color(QPalette::Highlight));
+        theme_row->setPalette(active ? palette : QPalette());
+        theme_row->setAutoFillBackground(active);
+        label->setForegroundRole(active ? QPalette::HighlightedText : QPalette::WindowText);
+    };
+    connect(widgets_.mainMenu, &QMenu::hovered, theme_row, [theme_action, highlight_theme_row](QAction *action) {
+        highlight_theme_row(action == theme_action);
+    });
+    connect(widgets_.mainMenu, &QMenu::aboutToHide, theme_row, [highlight_theme_row] { highlight_theme_row(false); });
+    for (auto *button : widgets_.themeButtons->buttons()) button->installEventFilter(this);
 
     // The recovery catalog remains an internal action until its final Stage F placement is
     // approved.
@@ -810,8 +842,6 @@ void WindowShell::build_ui() {
     window_.statusBar()->setSizeGripEnabled(false);
     window_.statusBar()->addWidget(widgets_.status, 1);
 
-    widgets_.themeButtons = new QButtonGroup(&window_);
-    window_.statusBar()->addPermanentWidget(create_theme_switch(widgets_.themeButtons, &window_));
     window_.setCentralWidget(central);
 }
 
@@ -875,6 +905,9 @@ void WindowShell::retranslate() {
     widgets_.componentsAction->setText(ui_text(UiTextId::components));
     widgets_.donateAction->setText(ui_text(UiTextId::donate));
     widgets_.reportIssueAction->setText(ui_text(UiTextId::report_issue));
+    const auto theme_label = QCoreApplication::translate("MainWindow", "Interface:");
+    widgets_.themeLabel->setText(theme_label);
+    widgets_.themeRowAction->setText(theme_label);
     for (auto *action : widgets_.languageActions->actions()) {
         const auto action_language = static_cast<AppLanguage>(action->data().toInt());
         action->setEnabled(translations_->available(action_language));
@@ -1020,6 +1053,30 @@ WindowShell::WindowShell(QMainWindow &window, WindowShellCallbacks callbacks,
 WindowShell::~WindowShell() = default;
 
 bool WindowShell::eventFilter(QObject *watched, QEvent *event) {
+    if (event->type() == QEvent::KeyPress && widgets_.mainMenu && widgets_.mainMenu->isVisible()) {
+        const auto key = static_cast<QKeyEvent *>(event)->key();
+        const auto enter = key == Qt::Key_Return || key == Qt::Key_Enter;
+        if (watched == widgets_.mainMenu && widgets_.mainMenu->activeAction() == widgets_.themeRowAction &&
+            (enter || key == Qt::Key_Space)) {
+            if (auto *selected = widgets_.themeButtons->checkedButton()) {
+                selected->setFocus(Qt::TabFocusReason);
+                return true;
+            }
+        } else if (auto *swatch = qobject_cast<QAbstractButton *>(watched)) {
+            const auto id = widgets_.themeButtons->id(swatch);
+            if (id >= 0 && enter) {
+                swatch->click();
+                return true;
+            }
+            if (id >= 0 && (key == Qt::Key_Left || key == Qt::Key_Right)) {
+                // Qt's default arrow navigation in an exclusive group also clicks the next button.
+                const auto count = static_cast<int>(widgets_.themeButtons->buttons().size());
+                const auto next = (id + (key == Qt::Key_Left ? count - 1 : 1)) % count;
+                widgets_.themeButtons->button(next)->setFocus(Qt::TabFocusReason);
+                return true;
+            }
+        }
+    }
     if (watched == &window_ &&
         (event->type() == QEvent::Show || event->type() == QEvent::Hide ||
          event->type() == QEvent::WindowStateChange || event->type() == QEvent::WindowActivate)) {
@@ -1047,6 +1104,7 @@ void WindowShell::connect_presentation() {
         static_cast<void>(apply_language(static_cast<AppLanguage>(action->data().toInt()), true));
     });
     connect(w.themeButtons, &QButtonGroup::idClicked, this, [this](int id) {
+        widgets_.mainMenu->close();
         apply_theme(static_cast<AppTheme>(id));
         changed();
     });

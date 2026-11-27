@@ -1,7 +1,7 @@
-# VO-VE 1.0.5 Distribution
+# VO-VE 1.0.6 Distribution
 
-Application source commit: f6e84a36fe5c10fec04742ce0ec412bb02d84777.
-Build label: EXPLICIT-RECOVERY-20261118.
+Application source commit: 4167126ea2cefbecca11b6fe1f6e8dd6e57b699c.
+Build label: UNIFIED-RECOVERY-20261127.
 
 The uploaded packages are Windows Setup and Linux DEB, with SHA256SUMS.txt.
 The application snapshot is in Source/ in this release tag's automatic ZIP and TAR.GZ archives.

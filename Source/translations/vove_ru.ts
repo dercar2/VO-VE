@@ -455,6 +455,10 @@ preview</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message>
+        <source>Interface:</source>
+        <translation>Интерфейс:</translation>
+    </message>
     <message><source>Animation unavailable</source><translation>Анимация недоступна</translation></message>
     <message>
         <source>Invalid Trash operation request</source>
@@ -3480,6 +3484,20 @@ Stage: %2</source>
 </context>
 <context>
     <name>TrashRecoveryDialog</name>
+    <message><source>An operation could not be completed.</source><translation>Операция не завершена.</translation></message>
+    <message><source>Stop…</source><translation>Прекратить…</translation></message>
+    <message><source>Copy operation details</source><translation>Скопировать сведения об операции</translation></message>
+    <message><source>Stop the remaining moves to Trash? Confirmed moves stay in Trash.</source><translation>Прекратить оставшееся перемещение в Корзину? Подтверждённые перемещения останутся в Корзине.</translation></message>
+    <message><source>If you choose to delete incomplete data instead, VO-VE will first check that it is safe.</source><translation>При выборе удаления незавершённых данных VO-VE сначала проверит, безопасно ли это.</translation></message>
+    <message><source>A recorded path was not found. This does not mean the item was lost.</source><translation>Записанный путь не найден. Это не означает, что файл потерян.</translation></message>
+    <message><source>The item or its permissions could not be verified.</source><translation>Не удалось подтвердить объект или его права доступа.</translation></message>
+    <message><source>Another object occupies the recorded destination.</source><translation>По записанному пути назначения находится другой объект.</translation></message>
+    <message><source>The recorded item could not be confirmed at either path.</source><translation>Не удалось подтвердить записанный объект ни по одному из двух путей.</translation></message>
+    <message><source>Trash cancellation stopped at item %1: %2</source><translation>Отмена Корзины остановлена на элементе %1: %2</translation></message>
+    <message><source>Trash records do not match or could not be saved. Recovery is still required.</source><translation>Записи Корзины не совпадают или их не удалось сохранить. Восстановление по-прежнему требуется.</translation></message>
+    <message><source>Cancel checks where the recorded items are. Confirmed moves stay in Trash. If verification fails, the operation stays paused. Copy its details for support; do not delete hidden files or reset the record.</source><translation>При отмене VO-VE проверит, где находятся записанные объекты. Подтверждённые перемещения останутся в Корзине. Если проверка не пройдёт, операция останется приостановленной. Скопируйте сведения для диагностики. Не удаляйте скрытые файлы и не сбрасывайте запись.</translation></message>
+    <message><source>Copy Trash recovery details</source><translation>Скопировать сведения об операции</translation></message>
+    <message><source>Details copied</source><translation>Сведения скопированы</translation></message>
     <message><source>Retry</source><translation>Повторить</translation></message>
     <message><source>Close</source><translation>Закрыть</translation></message>
     <message><source>Finish stopping</source><translation>Завершить прекращение</translation></message>

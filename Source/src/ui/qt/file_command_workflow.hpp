@@ -300,6 +300,8 @@ class FileCommandController::Impl final : public QObject {
     QStringList activeBatchSourcePaths_;
     QStringList activeBatchUnchangedPaths_;
     QString operationStatus_;
+    std::uint64_t trashCancellationReportId_{};
+    QString trashCancellationReport_;
     std::optional<PendingRenameOperation> pendingRenameOperation_;
     std::optional<PendingTransferPreparation> pendingTransferPreparation_;
     std::optional<PendingDirectoryTransferBatch> pendingDirectoryTransferBatch_;

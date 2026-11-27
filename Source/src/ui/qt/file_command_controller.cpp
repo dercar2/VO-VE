@@ -173,6 +173,32 @@ bool ambiguous_rename_status(const fileops::OperationStatus status) {
 
 QString trash_operation_error_text(const fileops::OperationStatus status,
                                   const std::string_view detail) {
+    using Status = fileops::OperationStatus;
+    const auto text = [](const char *source) {
+        return QCoreApplication::translate("TrashRecoveryDialog", source);
+    };
+    constexpr std::string_view item_prefix = "Trash cancellation item ";
+    if (detail.starts_with(item_prefix)) {
+        const auto separator = detail.find(':', item_prefix.size());
+        if (separator != std::string_view::npos) {
+            const auto ordinal = detail.substr(item_prefix.size(), separator - item_prefix.size());
+            if (!ordinal.empty() && ordinal.size() <= 12 &&
+                ordinal.find_first_not_of("0123456789/") == std::string_view::npos) {
+                const auto reason = status == Status::not_found
+                    ? text("A recorded path was not found. This does not mean the item was lost.")
+                    : status == Status::permission_denied
+                    ? text("The item or its permissions could not be verified.")
+                    : detail.find("destination is occupied") != std::string_view::npos
+                    ? text("Another object occupies the recorded destination.")
+                    : text("The recorded item could not be confirmed at either path.");
+                return text("Trash cancellation stopped at item %1: %2")
+                    .arg(QString::fromLatin1(ordinal.data(), static_cast<qsizetype>(ordinal.size())), reason);
+            }
+        }
+    }
+    if (detail.starts_with("Trash cancellation records (")) {
+        return text("Trash records do not match or could not be saved. Recovery is still required.");
+    }
     if (detail.find("DACL") != std::string_view::npos ||
         detail.find("security baseline") != std::string_view::npos ||
         detail.find("foreign owner") != std::string_view::npos) {
@@ -186,7 +212,6 @@ QString trash_operation_error_text(const fileops::OperationStatus status,
         return QCoreApplication::translate("TrashRecoveryDialog",
                                            "Trash records do not match; recovery is required");
     }
-    using Status = fileops::OperationStatus;
     switch (status) {
     case Status::success:
         return {};

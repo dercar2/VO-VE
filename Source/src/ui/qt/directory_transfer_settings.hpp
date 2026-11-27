@@ -47,6 +47,22 @@ inline std::filesystem::path archive_path(const std::filesystem::path &profile, 
     return profile.parent_path() / ("vove-directory-transfer-" + digest.result().toHex().toStdString() + ".archive");
 }
 
+inline bool archive_pending(const QSettings &settings, const QByteArray &bytes) {
+    if (bytes.isEmpty()) return false;
+    const auto profile = profile_path(settings);
+    if (profile.empty()) return false;
+    const fileops::DurableJournalStore store(archive_path(profile, bytes), maximum_bytes);
+    for (const auto &path : {store.primary_path(), store.previous_path(), store.temporary_path()}) {
+        std::error_code error;
+        const auto status = std::filesystem::symlink_status(path, error);
+        if (error ? error != std::errc::no_such_file_or_directory
+                  : status.type() != std::filesystem::file_type::not_found) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // On POSIX a rename is not durable until the containing directory is flushed.
 // Include ancestors in case the profile directory itself was newly created.
 inline bool sync_parent_directories(const std::filesystem::path &path) {

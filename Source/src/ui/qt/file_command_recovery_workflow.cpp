@@ -7,6 +7,57 @@
 namespace vove::ui {
 using namespace file_command_detail;
 
+namespace {
+enum class RecoveryChoice { close, retry, stop };
+
+QString recovery_text(const char *source) {
+    return QCoreApplication::translate("TrashRecoveryDialog", source);
+}
+
+RecoveryChoice show_recovery_actions(QWidget *owner, const QStringList &report,
+                                    const bool can_retry, const bool can_stop) {
+    QDialog dialog(owner);
+    dialog.setObjectName(QStringLiteral("unfinishedOperationDialog"));
+    dialog.setProperty("mainMenuDialog", true);
+    dialog.setWindowTitle(recovery_text("Unfinished operation…"));
+    auto *layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(12);
+    auto *message = new QLabel(recovery_text("An operation could not be completed."), &dialog);
+    message->setObjectName(QStringLiteral("recoveryMessage"));
+    message->setWordWrap(true);
+    layout->addWidget(message);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    auto *retry = buttons->addButton(recovery_text("Retry"), QDialogButtonBox::ActionRole);
+    auto *stop = buttons->addButton(recovery_text("Stop…"), QDialogButtonBox::ActionRole);
+    auto *copy = buttons->addButton(recovery_text("Copy operation details"), QDialogButtonBox::ActionRole);
+    auto *close = buttons->button(QDialogButtonBox::Close);
+    retry->setObjectName(QStringLiteral("retryRecoveryButton"));
+    stop->setObjectName(QStringLiteral("stopRecoveryButton"));
+    copy->setObjectName(QStringLiteral("copyRecoveryDetailsButton"));
+    close->setObjectName(QStringLiteral("closeRecoveryButton"));
+    close->setText(recovery_text("Close"));
+    retry->setEnabled(can_retry);
+    stop->setEnabled(can_stop);
+    for (auto *button : {retry, stop, copy}) button->setAutoDefault(false);
+    close->setDefault(true);
+    close->setFocus();
+    QObject::connect(retry, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(1); });
+    QObject::connect(stop, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(2); });
+    QObject::connect(copy, &QPushButton::clicked, &dialog, [&report] {
+        QApplication::clipboard()->setText(report.join(QLatin1Char('\n')));
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    switch (dialog.exec()) {
+    case 1: return RecoveryChoice::retry;
+    case 2: return RecoveryChoice::stop;
+    default: return RecoveryChoice::close;
+    }
+}
+} // namespace
+
 CurrentOperationJournalState FileCommandController::Impl::refresh_current_operation_journal_state() {
     const auto loaded_operation =
         fileops::CurrentOperationJournalStore(currentOperationJournalPath_).read();
@@ -182,7 +233,17 @@ bool FileCommandController::Impl::submit_trash_recovery(const bool cancel_remain
     const auto purging = loaded.ok() &&
                          loaded.encoding == fileops::CurrentOperationJournalEncoding::typed &&
                          loaded.kind == fileops::CurrentOperationKind::trash_purge;
-    const auto intent = cancel_remaining ? TrashOperationIntent::cancel_move
+    fileops::TrashTransaction move;
+    std::string detail;
+    const auto move_record = loaded.ok() &&
+        loaded.encoding == fileops::CurrentOperationJournalEncoding::typed &&
+        loaded.kind == fileops::CurrentOperationKind::trash_move &&
+        fileops::decode_trash_transaction(loaded.payload, move, detail);
+    const auto cancelling = cancel_remaining || (move_record &&
+        (move.phase == fileops::TrashPhase::cancel_remaining_intent ||
+         move.phase == fileops::TrashPhase::cancel_container_remove_intent));
+    const auto report_id = cancelling && move_record ? move.operation_id : 0U;
+    const auto intent = cancelling ? TrashOperationIntent::cancel_move
                         : purging     ? TrashOperationIntent::purge
                         : restoring ? TrashOperationIntent::restore
                                     : TrashOperationIntent::move;
@@ -203,12 +264,15 @@ bool FileCommandController::Impl::submit_trash_recovery(const bool cancel_remain
                     Qt::QueuedConnection);
             }
         },
-        [window, intent](fileops::TrashResult result) mutable {
+        [window, intent, report_id](fileops::TrashResult result) mutable {
             if (!window.isNull()) {
                 QMetaObject::invokeMethod(
                     window,
-                    [window, intent, result = std::move(result)]() mutable {
+                    [window, intent, report_id, result = std::move(result)]() mutable {
                         if (!window.isNull()) {
+                            window->trashCancellationReportId_ = report_id;
+                            window->trashCancellationReport_ = report_id != 0U && !result.ok()
+                                ? trash_operation_error_text(result.operation_status, result.detail_utf8) : QString{};
                             window->handle_trash_result(result, intent);
                         }
                     },
@@ -304,74 +368,83 @@ void FileCommandController::Impl::offer_directory_transfer_discard() {
         return decoded && decoded == open_directory_transfer_state(
             encode_directory_transfer_recovery_state(directoryTransferCompletionKnown_));
     };
-    QMessageBox decision(
-        QMessageBox::Warning,
-        QCoreApplication::translate("MainWindow", "Incomplete folder transfer"),
-        QCoreApplication::translate("MainWindow",
-                                    "Choose what to do with this unfinished folder transfer."),
-        QMessageBox::NoButton, dialog_owner());
-    decision.setObjectName(QStringLiteral("directoryTransferRecoveryDecision"));
-    auto *resume = decision.addButton(QCoreApplication::translate(
-        "TrashRecoveryDialog", "Retry"), QMessageBox::ActionRole);
-    QPushButton *discard = nullptr;
+    QStringList report{operationStatus_,
+        QStringLiteral("VO-VE directory transfer %1").arg(directoryTransferRecoveryRequestId_),
+        directoryTransferRecoverySource_, directoryTransferRecoveryDestination_};
+    if (!directoryTransferRecoveryManifest_.isEmpty())
+        report << directoryTransferRecoveryManifest_;
     if (directoryTransferDiscarding_) {
-        decision.setInformativeText(QCoreApplication::translate(
-            "TrashRecoveryDialog", "Retry will check whether unfinished data can be safely removed."));
-        resume->setObjectName(QStringLiteral("directoryTransferDiscardButton"));
-    } else {
-        resume->setObjectName(QStringLiteral("directoryTransferResumeButton"));
-        discard = decision.addButton(QCoreApplication::translate(
-            "MainWindow", "Delete incomplete data"), QMessageBox::DestructiveRole);
-        discard->setObjectName(QStringLiteral("directoryTransferDiscardButton"));
+        report << recovery_text("Retry will check whether unfinished data can be safely removed.");
     }
-    auto *keep = decision.addButton(QMessageBox::Close);
-    keep->setText(QCoreApplication::translate("TrashRecoveryDialog", "Close"));
-    auto *archive = decision.addButton(QCoreApplication::translate(
-        "TrashRecoveryDialog", "Stop and leave files as they are…"), QMessageBox::ActionRole);
-    archive->setObjectName(QStringLiteral("directoryTransferArchiveButton"));
-    keep->setObjectName(QStringLiteral("directoryTransferKeepButton"));
+    if (pendingDirectoryTransferBatch_) {
+        const auto &batch = *pendingDirectoryTransferBatch_;
+        report << QStringLiteral("Batch: %1/%2").arg(batch.completed).arg(batch.source_paths.size());
+    }
     const auto profile = transfer_settings::profile_path(QSettings{});
-    QString recordPath;
     if (!profile.empty() && !expected.isEmpty()) {
-        recordPath = QDir::toNativeSeparators(display_path(transfer_settings::archive_path(profile, expected)));
-        decision.setDetailedText(QCoreApplication::translate("TrashRecoveryDialog", "Record location after stopping: %1").arg(recordPath));
+        report << recovery_text("Record location after stopping: %1").arg(
+            QDir::toNativeSeparators(display_path(transfer_settings::archive_path(profile, expected))));
     }
-    if (auto *buttons = decision.findChild<QDialogButtonBox *>()) buttons->setOrientation(Qt::Vertical);
-    decision.setDefaultButton(keep);
-    decision.exec();
-    if (decision.clickedButton() == keep || decision.clickedButton() == nullptr) {
-        return;
-    }
-    if (decision.clickedButton() == archive) {
-        QMessageBox confirm(QMessageBox::Question, archive->text(),
-            QCoreApplication::translate("TrashRecoveryDialog",
-                "Stop processing the remaining queue? Original files, destinations and hidden "
-                "partial copies will stay where they are. You do not need to do anything else to use VO-VE."),
+    const auto stopping = [&] {
+        return !directoryTransferArchiveExpected_.isEmpty() ||
+               transfer_settings::archive_pending(QSettings{}, expected);
+    };
+    const auto stop_pending = stopping();
+    if (stop_pending) report << recovery_text("Finish stopping");
+    const auto state_matches = expected_matches_loaded();
+    const auto choice = show_recovery_actions(dialog_owner(), report,
+        state_matches && !stop_pending && ports_.read_recovery() == expected,
+        state_matches && bool(ports_.archive_recovery));
+    if (choice == RecoveryChoice::close) return;
+    bool request_discard = false;
+    if (choice == RecoveryChoice::stop) {
+        QMessageBox confirm(QMessageBox::Question, recovery_text("Stop…"),
+            recovery_text("Stop processing the remaining queue? Original files, destinations and hidden "
+                          "partial copies will stay where they are. You do not need to do anything else to use VO-VE."),
             QMessageBox::Yes | QMessageBox::Cancel, dialog_owner());
         confirm.setObjectName(QStringLiteral("directoryTransferArchiveConfirmation"));
-        if (!recordPath.isEmpty()) confirm.setDetailedText(recordPath);
+        QPushButton *discard = nullptr;
+        if (!stop_pending && !directoryTransferDiscarding_ && ports_.select_recovery) {
+            discard = confirm.addButton(QCoreApplication::translate(
+                "MainWindow", "Delete incomplete data"), QMessageBox::DestructiveRole);
+            discard->setObjectName(QStringLiteral("directoryTransferDiscardButton"));
+            confirm.setInformativeText(recovery_text(
+                "If you choose to delete incomplete data instead, VO-VE will first check that it is safe."));
+        }
+        confirm.setDefaultButton(QMessageBox::Cancel);
+        confirm.setEscapeButton(QMessageBox::Cancel);
+        const auto answer = confirm.exec();
+        request_discard = discard && confirm.clickedButton() == discard;
+        if (!request_discard) {
+            if (answer != QMessageBox::Yes) return;
+            bool archived = false;
+            if (!mutation_in_flight() && !backend_busy() && !pendingRenameOperation_ &&
+                expected_matches_loaded() && ports_.archive_recovery) {
+                directoryTransferArchiveExpected_ = expected;
+                archived = ports_.archive_recovery(expected);
+            }
+            if (!archived) {
+                operationStatus_ = QCoreApplication::translate(
+                    "MainWindow", "Could not archive the local recovery record. Check the unfinished operation.");
+            } else {
+                pendingDirectoryTransferBatch_.reset();
+                forget_directory_transfer_recovery_state();
+                if (refresh_current_operation_journal_state() == CurrentOperationJournalState::none)
+                    operationStatus_ = recovery_text(
+                        "Operation stopped. Files were left as they are; the previous result is unknown. No action is needed.");
+            }
+            publish_status();
+            return;
+        }
+    } else if (directoryTransferDiscarding_) {
+        QMessageBox confirm(QMessageBox::Question, recovery_text("Retry"),
+            recovery_text("Retry will check whether unfinished data can be safely removed."),
+            QMessageBox::Yes | QMessageBox::Cancel, dialog_owner());
+        confirm.setObjectName(QStringLiteral("directoryDiscardRetryConfirmation"));
         confirm.setDefaultButton(QMessageBox::Cancel);
         if (confirm.exec() != QMessageBox::Yes) return;
-        bool archived = false;
-        if (!mutation_in_flight() && !backend_busy() && !pendingRenameOperation_ &&
-            expected_matches_loaded() && ports_.archive_recovery) {
-            directoryTransferArchiveExpected_ = expected;
-            archived = ports_.archive_recovery(expected);
-        }
-        if (!archived) {
-            operationStatus_ = QCoreApplication::translate("MainWindow", "Could not archive the local recovery record. Check the unfinished operation.");
-        } else {
-            pendingDirectoryTransferBatch_.reset();
-            forget_directory_transfer_recovery_state();
-            if (refresh_current_operation_journal_state() == CurrentOperationJournalState::none)
-                operationStatus_ = QCoreApplication::translate("TrashRecoveryDialog",
-                    "Operation stopped. Files were left as they are; the previous result is unknown. No action is needed.");
-        }
-        publish_status();
-        return;
     }
-    if (decision.clickedButton() != resume && decision.clickedButton() != discard) return;
-    if (mutation_in_flight() || backend_busy() || !expected_matches_loaded() ||
+    if (mutation_in_flight() || backend_busy() || stopping() || !expected_matches_loaded() ||
         ports_.read_recovery() != expected) {
         operationStatus_ = QCoreApplication::translate("TrashRecoveryDialog",
             "The operation could not be started. Its record was kept.");
@@ -379,7 +452,7 @@ void FileCommandController::Impl::offer_directory_transfer_discard() {
         return;
     }
     const auto previous = directoryTransferDiscarding_;
-    directoryTransferDiscarding_ = previous || decision.clickedButton() == discard;
+    directoryTransferDiscarding_ = previous || request_discard;
     const auto discarding = directoryTransferDiscarding_;
     if (discarding != previous && (!ports_.select_recovery ||
         !ports_.select_recovery(expected, encode_directory_transfer_recovery_state(directoryTransferCompletionKnown_)))) {
@@ -415,6 +488,8 @@ bool FileCommandController::Impl::submit_directory_transfer_recovery() {
         fileOperationService_.busy() || pendingRenameOperation_) {
         return false;
     }
+    if (!directoryTransferArchiveExpected_.isEmpty() ||
+        transfer_settings::archive_pending(QSettings{}, ports_.read_recovery())) return false;
     const fileops::BasicDirectoryTransferStreamRequest request{
         .request_id = next_directory_transfer_request_id(),
         .operation_id = directoryTransferRecoveryRequestId_,
@@ -623,104 +698,92 @@ bool FileCommandController::Impl::show_unfinished_operation_dialog() {
          loaded.kind == fileops::CurrentOperationKind::trash_purge);
     const auto decoded = is_trash &&
         fileops::decode_trash_transaction(loaded.payload, transaction, detail);
-    const auto cancellable = decoded && loaded.kind == fileops::CurrentOperationKind::trash_move &&
+    const auto cancellable = decoded && !archiving && loaded.kind == fileops::CurrentOperationKind::trash_move &&
         (transaction.phase == fileops::TrashPhase::prepared ||
          transaction.phase == fileops::TrashPhase::moving ||
          transaction.phase == fileops::TrashPhase::cancel_remaining_intent ||
          transaction.phase == fileops::TrashPhase::cancel_container_remove_intent);
-    const auto text = [](const char *source) {
-        return QCoreApplication::translate("TrashRecoveryDialog", source);
-    };
-    QDialog dialog(dialog_owner());
-    dialog.setObjectName(QStringLiteral("unfinishedOperationDialog"));
-    dialog.setProperty("mainMenuDialog", true);
-    dialog.setWindowTitle(text("Unfinished operation…"));
-    dialog.setMinimumWidth(440);
-    auto *layout = new QVBoxLayout(&dialog);
-    layout->setContentsMargins(24, 20, 24, 20);
-    layout->setSpacing(12);
-    const auto add_label = [&](const QString &value) {
-        auto *label = new QLabel(value, &dialog);
-        label->setTextFormat(Qt::PlainText);
-        label->setWordWrap(true);
-        layout->addWidget(label);
-    };
+    const auto last_cancel_report = cancellable && trashCancellationReportId_ == transaction.operation_id
+                                       ? trashCancellationReport_ : QString{};
+    QStringList report{operationStatus_};
+    report << (directoryTransferStateCorrupt_
+        ? QSettings{}.fileName()
+        : QDir::toNativeSeparators(display_path(currentOperationJournalPath_)));
     if (decoded) {
         const auto stored = std::ranges::count_if(transaction.items, [](const auto &item) {
             return item.location == fileops::TrashItemLocation::stored;
         });
-        add_label(text("Recorded moves to Trash: %1 of %2")
-            .arg(static_cast<qulonglong>(stored)).arg(transaction.items.size()));
+        report << QStringLiteral("VO-VE Trash operation %1").arg(transaction.operation_id)
+               << recovery_text("Recorded moves to Trash: %1 of %2")
+                      .arg(static_cast<qulonglong>(stored)).arg(transaction.items.size());
+        if (!last_cancel_report.isEmpty()) report << last_cancel_report;
         if (transaction.failure_status != fileops::OperationStatus::success) {
-            add_label(trash_operation_error_text(transaction.failure_status,
-                                                 transaction.failure_detail_utf8));
+            report << trash_operation_error_text(transaction.failure_status, transaction.failure_detail_utf8)
+                   << QString::fromStdString(transaction.failure_detail_utf8);
         }
-    } else {
-        add_label(operationStatus_);
-        if (object_transfer) {
-            const auto value = QJsonDocument::fromJson(QByteArray(
-                reinterpret_cast<const char *>(loaded.payload.data()), qsizetype(loaded.payload.size()))).object();
-            const auto items = value.value("items").toArray();
-            const auto index = value.value("index").toInteger(-1);
-            if (index >= 0 && index < items.size()) {
-                const auto item = items[index].toObject();
-                add_label(item.value("source").toString() + QStringLiteral("\n") +
-                          item.value("destination").toString());
+        const auto limit = std::min<std::size_t>(transaction.items.size(), 64U);
+        for (std::size_t i = 0; i < limit; ++i) {
+            const auto &item = transaction.items[i];
+            report << QStringLiteral("%1/%2: %3 -> %4").arg(i + 1U).arg(transaction.items.size())
+                .arg(display_path(item.restore_path), display_path(item.stored));
+        }
+        if (limit < transaction.items.size()) report << QStringLiteral("…");
+    } else if (object_transfer) {
+        const auto value = QJsonDocument::fromJson(QByteArray(
+            reinterpret_cast<const char *>(loaded.payload.data()), qsizetype(loaded.payload.size()))).object();
+        const auto items = value.value("items").toArray();
+        const auto index = value.value("index").toInteger(-1);
+        if (index >= 0 && index < items.size()) {
+            const auto item = items[index].toObject();
+            report << item.value("source").toString() << item.value("destination").toString();
+        }
+        const auto failure = property("objectTransferDetail").toString();
+        if (!failure.isEmpty()) report << failure;
+        report << (archiving
+            ? recovery_text("Finish stopping")
+            : recovery_text("Stopping leaves original files, destinations and hidden partial copies in place. The outcome remains unknown. You do not need to do anything else to use VO-VE."));
+    } else if (!diagnostic_only && loaded.ok() &&
+               loaded.encoding == fileops::CurrentOperationJournalEncoding::typed &&
+               loaded.kind == fileops::CurrentOperationKind::file_transfer) {
+        fileops::FileTransferTransaction transfer;
+        if (fileops::decode_file_transfer_transaction(loaded.payload, transfer, detail)) {
+            report << QStringLiteral("VO-VE file transfer %1").arg(transfer.operation_id);
+            if (transfer.active_step != fileops::FileTransferStep::none &&
+                transfer.active_index < transfer.items.size()) {
+                const auto &item = transfer.items[transfer.active_index];
+                report << display_path(item.source) << display_path(item.destination);
             }
-            const auto detail = property("objectTransferDetail").toString();
-            if (!detail.isEmpty()) add_label(detail);
+            if (!transfer.failure_detail_utf8.empty())
+                report << QString::fromStdString(transfer.failure_detail_utf8);
         }
+    } else if (pendingRenameOperation_) {
+        report << pendingRenameOperation_->source_path << pendingRenameOperation_->destination_path;
     }
-    add_label(object_transfer
-        ? text("Stopping leaves original files, destinations and hidden partial copies in place. The outcome remains unknown. You do not need to do anything else to use VO-VE.")
-        : cancellable
-        ? text("Already moved items stay in Trash. Remaining source files stay in place.")
-        : diagnostic_only
-        ? text("The record cannot be safely read. No action was taken. Copy its location for support.")
-        : text("This operation can be retried; cancelling it here is not supported."));
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-    if (!diagnostic_only) {
-        auto *retry = buttons->addButton(text(archiving ? "Finish stopping" : "Retry"), QDialogButtonBox::ActionRole);
-        retry->setObjectName(QStringLiteral("retryRecoveryButton"));
-        retry->setAutoDefault(false);
-        connect(retry, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(1); });
+    if (diagnostic_only) {
+        report << recovery_text("The record cannot be safely read. No action was taken. Copy its location for support.");
     }
+    const auto can_retry = !diagnostic_only && !archiving &&
+        (object_transfer || trashCoordinator_.owns_recovery() || fileTransferCoordinator_.owns_recovery() ||
+         permanentDeleteCoordinator_.owns_recovery() || batchRenameCoordinator_.owns_recovery() ||
+         pendingRenameOperation_);
     if (cancellable) {
-        auto *cancel = buttons->addButton(text("Cancel remaining moves"), QDialogButtonBox::ActionRole);
-        cancel->setObjectName(QStringLiteral("cancelRemainingMovesButton"));
-        cancel->setAutoDefault(false);
-        connect(cancel, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(2); });
+        report << recovery_text("Cancel checks where the recorded items are. Confirmed moves stay in Trash. "
+                               "If verification fails, the operation stays paused. Copy its details for support; "
+                               "do not delete hidden files or reset the record.");
+    } else if (can_retry && !object_transfer) {
+        report << recovery_text("This operation can be retried; cancelling it here is not supported.");
     }
-    if (object_transfer && !archiving) {
-        auto *archive = buttons->addButton(text("Stop and leave files as they are…"), QDialogButtonBox::ActionRole);
-        archive->setObjectName(QStringLiteral("archiveUnfinishedTransferButton"));
-        archive->setAutoDefault(false);
-        connect(archive, &QPushButton::clicked, &dialog, [&dialog] { dialog.done(3); });
-    }
-    const auto recordsFolder = directoryTransferStateCorrupt_
-        ? transfer_settings::profile_path(QSettings{}).parent_path() : currentOperationJournalPath_.parent_path();
-    if (!recordsFolder.empty()) {
-        auto *copy = buttons->addButton(text("Copy records folder path"), QDialogButtonBox::ActionRole);
-        copy->setAutoDefault(false);
-        connect(copy, &QPushButton::clicked, &dialog, [copy, recordsFolder, text] {
-            QApplication::clipboard()->setText(QDir::toNativeSeparators(display_path(recordsFolder)));
-            copy->setText(text("Path copied"));
-        });
-    }
-    auto *close = buttons->button(QDialogButtonBox::Close);
-    close->setText(text("Close"));
-    close->setDefault(true);
-    close->setFocus();
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
-    const auto choice = dialog.exec();
-    if (choice < 1 || choice > 3) return true;
-    if (choice == 3) {
-        QMessageBox confirm(QMessageBox::Question, text("Stop and leave files as they are…"),
-            text("Stop processing the remaining queue? Original files, destinations and hidden "
-                 "partial copies will stay where they are. You do not need to do anything else to use VO-VE."),
+    const auto choice = show_recovery_actions(dialog_owner(), report, can_retry, cancellable || object_transfer);
+    if (choice == RecoveryChoice::close) return true;
+    if (choice == RecoveryChoice::stop) {
+        QMessageBox confirm(QMessageBox::Question, recovery_text("Stop…"),
+            cancellable
+                ? recovery_text("Stop the remaining moves to Trash? Confirmed moves stay in Trash.")
+                : recovery_text("Stop processing the remaining queue? Original files, destinations and hidden "
+                                "partial copies will stay where they are. You do not need to do anything else to use VO-VE."),
             QMessageBox::Yes | QMessageBox::Cancel, dialog_owner());
-        confirm.setObjectName(QStringLiteral("stopObjectTransferConfirmation"));
+        confirm.setObjectName(cancellable ? QStringLiteral("trashStopConfirmation")
+                                          : QStringLiteral("stopObjectTransferConfirmation"));
         confirm.setDefaultButton(QMessageBox::Cancel);
         if (confirm.exec() != QMessageBox::Yes) return true;
     }
@@ -729,16 +792,18 @@ bool FileCommandController::Impl::show_unfinished_operation_dialog() {
     if (!mutation_in_flight() && !backend_busy() && current.status == loaded.status &&
         current.kind == loaded.kind && current.encoding == loaded.encoding &&
         current.payload == loaded.payload && objectTransferQueue_.archive_pending() == archiving) {
-        if (choice == 2) submitted = submit_trash_recovery(true);
-        else if (choice == 3) {
-            const auto payload = QByteArray(reinterpret_cast<const char *>(loaded.payload.data()),
-                                            qsizetype(loaded.payload.size()));
-            submitted = start_object_transfer({}, {}, fileops::FileTransferKind::copy, true,
-                                              QCryptographicHash::hash(payload, QCryptographicHash::Sha256));
+        if (choice == RecoveryChoice::stop) {
+            if (cancellable) submitted = submit_trash_recovery(true);
+            else if (object_transfer) {
+                const auto payload = QByteArray(reinterpret_cast<const char *>(loaded.payload.data()),
+                                                qsizetype(loaded.payload.size()));
+                const auto digest = archiving ? QByteArray{} :
+                    QCryptographicHash::hash(payload, QCryptographicHash::Sha256);
+                submitted = start_object_transfer({}, {}, fileops::FileTransferKind::copy, true, digest);
+            }
         } else if (object_transfer) {
-            if (!archiving && ports_.prepare_recovery_catalog) ports_.prepare_recovery_catalog();
-            submitted = start_object_transfer({}, {}, fileops::FileTransferKind::copy, true,
-                archiving ? std::optional<QByteArray>{QByteArray{}} : std::nullopt);
+            if (ports_.prepare_recovery_catalog) ports_.prepare_recovery_catalog();
+            submitted = start_object_transfer({}, {}, fileops::FileTransferKind::copy, true);
         } else if (trashCoordinator_.owns_recovery()) submitted = submit_trash_recovery();
         else if (fileTransferCoordinator_.owns_recovery()) {
             if (ports_.prepare_recovery_catalog) ports_.prepare_recovery_catalog();
@@ -749,7 +814,7 @@ bool FileCommandController::Impl::show_unfinished_operation_dialog() {
         else if (pendingRenameOperation_) submitted = submit_pending_rename_reconciliation();
     }
     if (!submitted) {
-        operationStatus_ = text("The operation could not be started. Its record was kept.");
+        operationStatus_ = recovery_text("The operation could not be started. Its record was kept.");
         publish_status();
     }
     return true;

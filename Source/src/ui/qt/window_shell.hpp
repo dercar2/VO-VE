@@ -105,6 +105,8 @@ struct ViewerWidgets {
     QAction *componentsAction{};
     QAction *donateAction{};
     QAction *reportIssueAction{};
+    QAction *themeRowAction{};
+    QLabel *themeLabel{};
     QActionGroup *languageActions{};
     QButtonGroup *themeButtons{};
     QShortcut *refreshShortcut{};

@@ -455,6 +455,10 @@ preview</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message>
+        <source>Interface:</source>
+        <translation>الواجهة:</translation>
+    </message>
     <message><source>Animation unavailable</source><translation>الرسوم المتحركة غير متاحة</translation></message>
     <message>
         <source>Invalid Trash operation request</source>
@@ -3489,6 +3493,20 @@ Stage: %2</source>
 </context>
 <context>
     <name>TrashRecoveryDialog</name>
+    <message><source>An operation could not be completed.</source><translation>لم تكتمل العملية.</translation></message>
+    <message><source>Stop…</source><translation>إيقاف…</translation></message>
+    <message><source>Copy operation details</source><translation>نسخ تفاصيل العملية</translation></message>
+    <message><source>Stop the remaining moves to Trash? Confirmed moves stay in Trash.</source><translation>هل تريد إيقاف نقل بقية العناصر إلى سلة المهملات؟ ستبقى العناصر التي تأكد نقلها في السلة.</translation></message>
+    <message><source>If you choose to delete incomplete data instead, VO-VE will first check that it is safe.</source><translation>إذا اخترت حذف البيانات غير المكتملة، فسيَتحقق VO-VE أولًا من أن حذفها آمن.</translation></message>
+    <message><source>A recorded path was not found. This does not mean the item was lost.</source><translation>لم يُعثر على مسار مسجل. هذا لا يعني فقدان الملف.</translation></message>
+    <message><source>The item or its permissions could not be verified.</source><translation>تعذر التحقق من العنصر أو أذوناته.</translation></message>
+    <message><source>Another object occupies the recorded destination.</source><translation>يوجد عنصر آخر في مسار الوجهة المسجل.</translation></message>
+    <message><source>The recorded item could not be confirmed at either path.</source><translation>لم يمكن التحقق من العنصر المسجل في أي من المسارين.</translation></message>
+    <message><source>Trash cancellation stopped at item %1: %2</source><translation>توقف إلغاء عملية سلة المهملات عند العنصر %1: %2</translation></message>
+    <message><source>Trash records do not match or could not be saved. Recovery is still required.</source><translation>سجلات سلة المهملات غير متطابقة أو تعذر حفظها. لا يزال الاسترداد مطلوبًا.</translation></message>
+    <message><source>Cancel checks where the recorded items are. Confirmed moves stay in Trash. If verification fails, the operation stays paused. Copy its details for support; do not delete hidden files or reset the record.</source><translation>يتحقق الإلغاء من مواقع العناصر المسجلة. تبقى العناصر التي تأكد نقلها في سلة المهملات. إذا فشل التحقق، تظل العملية متوقفة مؤقتًا. انسخ التفاصيل للدعم ولا تحذف الملفات المخفية أو تعيد ضبط السجل.</translation></message>
+    <message><source>Copy Trash recovery details</source><translation>نسخ تفاصيل استرداد سلة المهملات</translation></message>
+    <message><source>Details copied</source><translation>نُسخت التفاصيل</translation></message>
     <message><source>Retry</source><translation>إعادة المحاولة</translation></message>
     <message><source>Close</source><translation>إغلاق</translation></message>
     <message><source>Finish stopping</source><translation>إتمام الإيقاف</translation></message>

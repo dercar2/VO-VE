@@ -455,6 +455,10 @@ preview</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message>
+        <source>Interface:</source>
+        <translation>界面：</translation>
+    </message>
     <message><source>Animation unavailable</source><translation>动画不可用</translation></message>
     <message>
         <source>Invalid Trash operation request</source>
@@ -3474,6 +3478,20 @@ Stage: %2</source>
 </context>
 <context>
     <name>TrashRecoveryDialog</name>
+    <message><source>An operation could not be completed.</source><translation>操作未完成。</translation></message>
+    <message><source>Stop…</source><translation>停止…</translation></message>
+    <message><source>Copy operation details</source><translation>复制操作详情</translation></message>
+    <message><source>Stop the remaining moves to Trash? Confirmed moves stay in Trash.</source><translation>停止向回收站移动剩余项目？已确认移动的项目将保留在回收站中。</translation></message>
+    <message><source>If you choose to delete incomplete data instead, VO-VE will first check that it is safe.</source><translation>如果选择删除未完成的数据，VO-VE 会先检查是否安全。</translation></message>
+    <message><source>A recorded path was not found. This does not mean the item was lost.</source><translation>未找到记录的路径。这并不意味着文件已丢失。</translation></message>
+    <message><source>The item or its permissions could not be verified.</source><translation>无法验证此项目或其权限。</translation></message>
+    <message><source>Another object occupies the recorded destination.</source><translation>记录的目标路径已被另一个对象占用。</translation></message>
+    <message><source>The recorded item could not be confirmed at either path.</source><translation>无法在两个记录路径中的任何一个确认此项目。</translation></message>
+    <message><source>Trash cancellation stopped at item %1: %2</source><translation>回收站取消操作在第 %1 项停止：%2</translation></message>
+    <message><source>Trash records do not match or could not be saved. Recovery is still required.</source><translation>回收站记录不一致或无法保存。仍需恢复。</translation></message>
+    <message><source>Cancel checks where the recorded items are. Confirmed moves stay in Trash. If verification fails, the operation stays paused. Copy its details for support; do not delete hidden files or reset the record.</source><translation>取消时将检查记录的项目所在位置。已确认的移动会保留在回收站中。如果验证失败，操作将保持暂停。请复制详细信息以供支持人员查看；请勿删除隐藏文件或重置记录。</translation></message>
+    <message><source>Copy Trash recovery details</source><translation>复制回收站恢复详情</translation></message>
+    <message><source>Details copied</source><translation>已复制详情</translation></message>
     <message><source>Retry</source><translation>重试</translation></message>
     <message><source>Close</source><translation>关闭</translation></message>
     <message><source>Finish stopping</source><translation>完成停止操作</translation></message>

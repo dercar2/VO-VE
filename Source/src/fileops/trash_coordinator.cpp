@@ -396,6 +396,12 @@ bool same_manifest_identity(const TrashTransaction &manifest, const TrashTransac
     return true;
 }
 
+std::string trash_cancel_item_detail(const std::size_t index, const std::size_t total,
+                                     const std::string_view reason) {
+    return "Trash cancellation item " + std::to_string(index + 1U) + "/" +
+           std::to_string(total) + ": " + std::string(reason);
+}
+
 #ifdef _WIN32
 bool confirmed_missing_path(const std::filesystem::path &path) {
     if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
@@ -640,7 +646,8 @@ TrashVaultSelection select_trash_vault_root(const std::filesystem::path &source,
 }
 
 bool preflight_trash_security(const TrashTransaction &transaction, const bool restoring,
-                              OperationStatus &status, std::string &detail) {
+                              OperationStatus &status, std::string &detail,
+                              const bool cancelling = false) {
     static_cast<void>(restoring);
     if (transaction.items.empty()) {
         status = OperationStatus::invalid_request;
@@ -660,6 +667,19 @@ bool preflight_trash_security(const TrashTransaction &transaction, const bool re
     for (std::size_t index{}; index < transaction.items.size(); ++index) {
         const auto &item = transaction.items[index];
         const auto directory = item.kind == TrashItemKind::directory;
+        const auto report = [&](const detail::TrashSecurityResult &failure,
+                                const std::filesystem::path &path) {
+            status = failure.status;
+            detail = failure.detail_utf8;
+            if (!cancelling) return;
+            if (confirmed_missing_path(path)) {
+                status = OperationStatus::not_found;
+                detail = "recorded path could not be found";
+            } else if (status == OperationStatus::permission_denied) {
+                detail = "permissions do not match the recorded state";
+            }
+            detail = trash_cancel_item_detail(index, transaction.items.size(), detail);
+        };
         if (item.stored.parent_path().parent_path() != vault) {
             status = OperationStatus::invalid_request;
             detail = "trash transaction crosses owned vaults";
@@ -698,8 +718,7 @@ bool preflight_trash_security(const TrashTransaction &transaction, const bool re
                     if (!(active && transaction.active_step == TrashStep::purge &&
                           attributes == INVALID_FILE_ATTRIBUTES &&
                           (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND))) {
-                        status = checked.status;
-                        detail = checked.detail_utf8;
+                        report(checked, item.current);
                         return false;
                     }
                 }
@@ -769,8 +788,7 @@ bool preflight_trash_security(const TrashTransaction &transaction, const bool re
                           item.restore_path, item.current_snapshot,
                           item.original_security_descriptor_sddl_utf8, false, directory);
             if (!verified.ok()) {
-                status = verified.status;
-                detail = verified.detail_utf8;
+                report(verified, item.restore_path);
                 return false;
             }
             continue;
@@ -781,8 +799,7 @@ bool preflight_trash_security(const TrashTransaction &transaction, const bool re
         const auto verified = vove::fileops::detail::verify_hardened_trash_payload(
             item.stored, item.current_snapshot, item.directory_purge_cursor != 0, directory);
         if (!verified.ok()) {
-            status = verified.status;
-            detail = verified.detail_utf8;
+            report(verified, item.stored);
             return false;
         }
     }
@@ -1922,15 +1939,43 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
     }
 
     [[nodiscard]] StepResult recover_store_security_intent(TrashTransaction &transaction,
-                                                           const std::size_t index) {
+                                                           const std::size_t index,
+                                                           const bool cancelling = false) {
 #ifndef _WIN32
         static_cast<void>(transaction);
         static_cast<void>(index);
+        static_cast<void>(cancelling);
         return {StepOutcome::recovery_required, OperationStatus::unsupported,
                 "VO-VE Trash security is not enabled on this platform"};
 #else
         auto &item = transaction.items[index];
+        const auto unresolved = [&](const detail::TrashSecurityResult &stored,
+                                    const detail::TrashSecurityResult &source) -> StepResult {
+            if (cancelling) {
+                const auto at = [&](const std::string_view reason) {
+                    return trash_cancel_item_detail(index, transaction.items.size(), reason);
+                };
+                if (confirmed_missing_path(item.restore_path) && confirmed_missing_path(item.stored))
+                    return {StepOutcome::recovery_required, OperationStatus::not_found,
+                            at("neither recorded path could be found")};
+                if (stored.status == OperationStatus::permission_denied ||
+                    source.status == OperationStatus::permission_denied)
+                    return {StepOutcome::recovery_required, OperationStatus::permission_denied,
+                            at("permissions do not match the recorded state")};
+                return {StepOutcome::recovery_required, OperationStatus::unknown_outcome,
+                        at("could not verify exactly one unchanged payload; source: " +
+                           source.detail_utf8 + "; Trash: " + stored.detail_utf8)};
+            }
+            return {StepOutcome::recovery_required, OperationStatus::conflict,
+                    "active Trash store is not anchored to exactly one verified payload"};
+        };
         if (item.payload_policy == TrashPayloadPolicy::preserve_permissions) {
+            std::string baseline_detail;
+            if (cancelling && !detail::validate_preserved_trash_security(
+                    item.original_security_descriptor_sddl_utf8, baseline_detail)) {
+                return {StepOutcome::recovery_required, OperationStatus::invalid_request,
+                        trash_cancel_item_detail(index, transaction.items.size(), baseline_detail)};
+            }
             auto stored = detail::verify_preserved_trash_payload(item.stored, item.current_snapshot,
                 item.original_security_descriptor_sddl_utf8, true);
             auto source = detail::verify_preserved_trash_payload(item.restore_path, item.current_snapshot,
@@ -1938,10 +1983,10 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
             if (stored.ok() == source.ok() ||
                 !(stored.ok() ? confirmed_missing_or_distinct_source(item.restore_path, item.current_snapshot)
                               : confirmed_missing_path(item.stored))) {
-                return {StepOutcome::recovery_required, OperationStatus::conflict,
-                        "preserved Trash store is not anchored to exactly one unchanged payload"};
+                return unresolved(stored, source);
             }
             item.current_snapshot = stored.ok() ? std::move(stored.snapshot) : std::move(source.snapshot);
+            if (cancelling) return {StepOutcome::committed, OperationStatus::success, {}};
             std::string detail;
             if (!persist(transaction, detail)) {
                 return {StepOutcome::journal_error, OperationStatus::io_error, std::move(detail)};
@@ -1949,6 +1994,12 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
             return {StepOutcome::committed, OperationStatus::success, {}};
         }
         const auto directory = item.kind == TrashItemKind::directory;
+        std::string baseline_detail;
+        if (cancelling && !detail::validate_restorable_trash_dacl(
+                item.original_security_descriptor_sddl_utf8, baseline_detail)) {
+            return {StepOutcome::recovery_required, OperationStatus::invalid_request,
+                    trash_cancel_item_detail(index, transaction.items.size(), baseline_detail)};
+        }
         auto stored = vove::fileops::detail::verify_hardened_trash_payload(
             item.stored, item.current_snapshot, true, directory);
         auto source_hardened = vove::fileops::detail::verify_hardened_trash_payload(
@@ -1960,8 +2011,18 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
         if (stored.ok() == source_matches ||
             !(stored.ok() ? confirmed_missing_or_distinct_source(item.restore_path, item.current_snapshot)
                           : confirmed_missing_path(item.stored))) {
-            return {StepOutcome::recovery_required, OperationStatus::conflict,
-                    "active trash store is not anchored to exactly one owned payload"};
+            return unresolved(stored, source_original);
+        }
+        if (cancelling && !directory) {
+            auto &verified = stored.ok() ? stored : source_hardened.ok() ? source_hardened : source_original;
+            if (verified.snapshot.size_bytes != item.current_snapshot.size_bytes ||
+                verified.snapshot.modified_unix_ns != item.current_snapshot.modified_unix_ns)
+                return {StepOutcome::recovery_required, OperationStatus::source_changed,
+                        trash_cancel_item_detail(index, transaction.items.size(), "payload content metadata changed")};
+            item.current_snapshot = std::move(verified.snapshot);
+            item.security_state = source_matches && !source_hardened.ok()
+                                      ? TrashSecurityState::original : TrashSecurityState::hardened;
+            return {StepOutcome::committed, OperationStatus::success, {}};
         }
         if (stored.ok()) {
             item.current_snapshot = std::move(stored.snapshot);
@@ -2110,8 +2171,26 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
         }
         std::string detail;
         if (result.ok()) {
-            if (!apply_security_after_rename(transaction, index, step, result, detail) ||
-                !apply_success(transaction, index, step, result, detail)) {
+            const auto &item = transaction.items[index];
+            const bool verify_cancel_snapshot = transaction.phase == TrashPhase::cancel_remaining_intent &&
+                step == TrashStep::store && item.kind == TrashItemKind::regular_file;
+            const auto matches_recorded_metadata = [&] {
+                return !verify_cancel_snapshot ||
+                    (result.confirmed_snapshot.size_bytes == item.current_snapshot.size_bytes &&
+                     result.confirmed_snapshot.modified_unix_ns == item.current_snapshot.modified_unix_ns);
+            };
+            if (!matches_recorded_metadata()) {
+                return {StepOutcome::recovery_required, OperationStatus::source_changed,
+                        "payload content metadata differs from the cancellation record"};
+            }
+            if (!apply_security_after_rename(transaction, index, step, result, detail)) {
+                return {StepOutcome::recovery_required, OperationStatus::unknown_outcome, detail};
+            }
+            if (!matches_recorded_metadata()) {
+                return {StepOutcome::recovery_required, OperationStatus::source_changed,
+                        "payload content metadata changed during cancellation verification"};
+            }
+            if (!apply_success(transaction, index, step, result, detail)) {
                 return {StepOutcome::recovery_required, OperationStatus::unknown_outcome, detail};
             }
             clear_active(transaction, transaction.phase != TrashPhase::rollback &&
@@ -2395,14 +2474,12 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
         }
         namespace_lease = std::move(*pinned);
         if (transaction.active_step == TrashStep::store) {
-            const auto secured = recover_store_security_intent(transaction, transaction.active_index);
+            const auto secured = recover_store_security_intent(transaction, transaction.active_index, true);
             if (secured.outcome != StepOutcome::committed) {
                 return recovery_result(transaction, secured);
             }
         }
-        // Cleanup-only intent proves the released sources were already reconciled. They no
-        // longer belong to this operation and may be edited or deleted before a restart.
-        if (transaction.phase != TrashPhase::cancel_container_remove_intent) {
+        if (transaction.active_step != TrashStep::none && transaction.active_step != TrashStep::store) {
             OperationStatus security_status{};
             if (!preflight_trash_security(transaction, false, security_status, detail)) {
                 return fail(security_status, std::move(detail));
@@ -2410,12 +2487,24 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
         }
 #endif
         if (transaction.active_step != TrashStep::none) {
+            const auto index = transaction.active_index;
             const auto reconciled = reconcile_active(transaction, stop);
             if (reconciled.outcome != StepOutcome::committed &&
                 reconciled.outcome != StepOutcome::no_commit) {
-                return recovery_result(transaction, reconciled);
+                return fail(reconciled.status, trash_cancel_item_detail(
+                    index, transaction.items.size(), reconciled.detail), reconciled.outcome);
             }
         }
+#ifdef _WIN32
+        // Record a proven in-flight rename first, without retrying it. An unverified
+        // remainder still keeps the full journal and does not publish any manifest.
+        if (transaction.phase != TrashPhase::cancel_container_remove_intent) {
+            OperationStatus security_status{};
+            if (!preflight_trash_security(transaction, false, security_status, detail, true)) {
+                return fail(security_status, std::move(detail));
+            }
+        }
+#endif
         std::error_code container_error;
         const auto container_status = std::filesystem::symlink_status(
             transaction.items.front().stored.parent_path(), container_error);
@@ -2437,8 +2526,8 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
                     const auto revision = platform::query_directory_revision(item.restore_path);
                     if (!revision || !same_source_revision(revision.revision_utf8,
                                                           item.current_snapshot.source_revision_utf8)) {
-                        return fail(OperationStatus::source_changed,
-                                    "Trash cancellation could not confirm an untouched directory");
+                        return fail(OperationStatus::source_changed, trash_cancel_item_detail(
+                            index, transaction.items.size(), "could not confirm the original directory"));
                     }
                 } else {
                     const auto opened = platform::open_read_only_source(
@@ -2447,8 +2536,8 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
                         opened.source->modified_unix_ns() != item.current_snapshot.modified_unix_ns ||
                         !same_source_revision(opened.source->source_revision_utf8(),
                                               item.current_snapshot.source_revision_utf8)) {
-                        return fail(OperationStatus::source_changed,
-                                    "Trash cancellation could not confirm an untouched file");
+                        return fail(OperationStatus::source_changed, trash_cancel_item_detail(
+                            index, transaction.items.size(), "could not confirm the original file"));
                     }
                 }
                 continue;
@@ -2463,8 +2552,9 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
                                      : checked.evidence == OperationEvidence::no_commit &&
                                            checked.source_matches_expected && !checked.destination_present;
             if (!matches) {
-                return fail(checked.status, "Trash cancellation could not confirm a planned payload: " +
-                                               checked.detail_utf8);
+                const auto status = checked.ok() ? OperationStatus::source_changed : checked.status;
+                return fail(status, trash_cancel_item_detail(
+                    index, transaction.items.size(), "could not confirm a planned payload: " + checked.detail_utf8));
             }
         }
         clear_active(transaction);
@@ -2485,16 +2575,21 @@ struct TrashCoordinator::State : std::enable_shared_from_this<State> {
         }
         const auto central = manifest_path(options.manifest_directory, transaction.operation_id);
         const auto empty = published.items.empty();
+        const auto update = [&](const std::filesystem::path &path, const TrashTransaction &subset,
+                                const TrashPhase phase, const bool write, const char *label) {
+            if (update_cancel_metadata(path, transaction, empty ? nullptr : &subset, phase, write, detail)) {
+                return true;
+            }
+            detail = std::string("Trash cancellation records (") + label + "): " + detail;
+            return false;
+        };
         const auto metadata = [&](const bool write) {
-            return update_cancel_metadata(central, transaction, empty ? nullptr : &published,
-                                          TrashPhase::published, write, detail)
+            return update(central, published, TrashPhase::published, write, "central manifest")
 #ifdef _WIN32
-                   && update_cancel_metadata(trash_rescue_manifest_path(transaction), transaction,
-                                             empty ? nullptr : &published, TrashPhase::published,
-                                             write, detail)
-                   && update_cancel_metadata(trash_rescue_plan_path(transaction), transaction,
-                                             empty ? nullptr : &plan, TrashPhase::prepared,
-                                             write, detail)
+                   && update(trash_rescue_manifest_path(transaction), published,
+                             TrashPhase::published, write, "rescue manifest")
+                   && update(trash_rescue_plan_path(transaction), plan, TrashPhase::prepared,
+                             write, "rescue plan")
 #endif
                 ;
         };
